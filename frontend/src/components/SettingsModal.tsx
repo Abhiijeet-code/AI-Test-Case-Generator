@@ -66,7 +66,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setTimeout(() => setTestingStatus('idle'), 3000);
     } catch (error: any) {
       setTestingStatus('failed');
-      setTestingMessage(error.response?.data?.error || error.message || 'Connection failed');
+      const errObj = error.response?.data?.error;
+      const errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Connection failed');
+      setTestingMessage(errMsg);
     }
   };
 

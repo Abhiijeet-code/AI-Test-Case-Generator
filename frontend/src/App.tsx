@@ -281,7 +281,8 @@ function App() {
           jiraTicket = result.ticket;
           setMessages((prev) => [...prev, { role: 'jira-ticket', content: '', jiraTicket }]);
         } catch (jiraError: any) {
-          const errMsg = jiraError.response?.data?.error || jiraError.message;
+          const errObj = jiraError.response?.data?.error;
+          const errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || jiraError.message || 'Jira fetch failed');
           setMessages((prev) => [
             ...prev,
             { role: 'error', content: `⚠️ Jira fetch failed: ${errMsg}` },
@@ -309,7 +310,8 @@ function App() {
         return updated;
       });
     } catch (error: any) {
-      const msg = error.response?.data?.error || error.message;
+      const errObj = error.response?.data?.error;
+      const msg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Generation failed');
       setMessages((prev) => {
         const updated = [...prev, { role: 'error' as const, content: `Error: ${msg}` }];
         if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));

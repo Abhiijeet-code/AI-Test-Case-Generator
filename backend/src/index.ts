@@ -49,13 +49,13 @@ app.post('/api/test-connection', async (req: Request, res: Response) => {
 
 // ─── Jira Fetch Endpoint ────────────────────────────────────────────────────
 app.post('/api/jira/fetch', async (req: Request, res: Response) => {
-  const { jiraId } = req.body;
+  const { jiraId, config } = req.body;
 
   if (!jiraId) {
     return res.status(400).json({ error: 'jiraId is required' });
   }
 
-  const settings = getSettings();
+  const settings = getSettings(config);
   const { jiraBaseUrl, jiraEmail, jiraApiToken } = settings;
 
   if (!jiraBaseUrl || !jiraEmail || !jiraApiToken) {
@@ -126,11 +126,13 @@ app.post('/api/jira/fetch', async (req: Request, res: Response) => {
 
 // ─── Generate Test Cases ────────────────────────────────────────────────────
 app.post('/api/generate', async (req: Request, res: Response) => {
-  const { requirement, jiraTicket } = req.body;
+  const { requirement, jiraTicket, config } = req.body;
 
   if (!requirement && !jiraTicket) {
     return res.status(400).json({ error: 'requirement or jiraTicket is required' });
   }
+
+  const settings = getSettings(config);
 
   try {
     const prompt = jiraTicket
@@ -140,7 +142,7 @@ app.post('/api/generate', async (req: Request, res: Response) => {
     let testCases;
     let attempts = 0;
     while (attempts < 2) {
-      let rawResponse = await generateTestCase(prompt);
+      let rawResponse = await generateTestCase(prompt, settings);
       if (rawResponse.startsWith('```json')) {
         rawResponse = rawResponse.replace(/^```json/, '').replace(/```$/, '').trim();
       } else if (rawResponse.startsWith('```')) {

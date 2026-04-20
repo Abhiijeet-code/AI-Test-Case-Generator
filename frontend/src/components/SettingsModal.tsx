@@ -43,11 +43,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setSaving(true);
     try {
       await saveSettings(settings);
-      onClose();
     } catch (error) {
-      console.error('Failed to save settings', error);
+      console.error('Backend save failed (expected on Vercel):', error);
     } finally {
+      // Always save locally to ensure persistence in serverless environments
+      localStorage.setItem('appSettings', JSON.stringify(settings));
+      if ((window as any).onSettingsUpdate) {
+        (window as any).onSettingsUpdate(settings);
+      }
       setSaving(false);
+      onClose();
     }
   };
 

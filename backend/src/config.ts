@@ -37,21 +37,26 @@ const defaultSettings: AppSettings = {
   groqModel: 'llama-3.3-70b-versatile',
 };
 
-export function getSettings(): AppSettings {
+export function getSettings(overrides?: Partial<AppSettings>): AppSettings {
+  let settings = { ...defaultSettings };
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-      return { ...defaultSettings, ...JSON.parse(data) };
+      settings = { ...settings, ...JSON.parse(data) };
     }
   } catch (error) {
-    console.error('Error reading settings', error);
+    // Expected on Vercel read-only filesystem if file skip
   }
-  return defaultSettings;
+  return { ...settings, ...overrides };
 }
 
 export function saveSettings(settings: Partial<AppSettings>): AppSettings {
   const current = getSettings();
   const updated = { ...current, ...settings };
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+  } catch (error) {
+    console.warn('Could not persist settings to disk (expected on Vercel). Settings will be ephemeral.');
+  }
   return updated;
 }

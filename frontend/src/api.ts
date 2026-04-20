@@ -14,13 +14,13 @@ export const saveSettings = async (settings: any) => {
   return res.data;
 };
 
-export const generateTestCase = async (requirement: string, jiraTicket?: any) => {
-  const res = await api.post('/generate', { requirement, jiraTicket });
+export const generateTestCase = async (requirement: string, jiraTicket?: any, config?: any) => {
+  const res = await api.post('/generate', { requirement, jiraTicket, config });
   return res.data;
 };
 
-export const fetchJiraTicket = async (jiraId: string) => {
-  const res = await api.post('/jira/fetch', { jiraId });
+export const fetchJiraTicket = async (jiraId: string, config?: any) => {
+  const res = await api.post('/jira/fetch', { jiraId, config });
   return res.data;
 };
 

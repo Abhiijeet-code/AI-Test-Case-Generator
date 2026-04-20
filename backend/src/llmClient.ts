@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { getSettings } from './config';
 
-export async function generateTestCase(prompt: string): Promise<string> {
-  const settings = getSettings();
+export async function generateTestCase(prompt: string, passedSettings?: any): Promise<string> {
+  const settings = passedSettings || getSettings();
   const provider = settings.activeProvider;
 
   try {

@@ -145,6 +145,20 @@ function App() {
     return {};
   });
 
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('appSettings');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  });
+
+  useEffect(() => {
+    (window as any).onSettingsUpdate = (newSettings: any) => {
+      setSettings(newSettings);
+    };
+  }, []);
+
   // Sync state to localStorage
   useEffect(() => {
     localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
@@ -263,7 +277,7 @@ function App() {
         setLoadingStage('Fetching Jira ticket...');
         const jiraId = trimmed.toUpperCase();
         try {
-          const result = await fetchJiraTicket(jiraId);
+          const result = await fetchJiraTicket(jiraId, settings);
           jiraTicket = result.ticket;
           setMessages((prev) => [...prev, { role: 'jira-ticket', content: '', jiraTicket }]);
         } catch (jiraError: any) {
@@ -279,7 +293,7 @@ function App() {
       }
 
       setLoadingStage('Generating test cases...');
-      const result = await generateTestCase(requirementText, jiraTicket);
+      const result = await generateTestCase(requirementText, jiraTicket, settings);
       
       const responseText = Array.isArray(result.response) 
         ? "Test cases generated successfully." 

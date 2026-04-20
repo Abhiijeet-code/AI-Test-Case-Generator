@@ -29,8 +29,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   useEffect(() => {
     getSettings().then((data) => {
-      setSettingsState((prev) => ({ ...prev, ...data }));
-    });
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        setSettingsState((prev) => ({ ...prev, ...data }));
+      }
+    }).catch(e => console.error('Failed to fetch settings:', e));
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

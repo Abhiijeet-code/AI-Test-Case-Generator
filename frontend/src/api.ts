@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: import.meta.env.PROD || window.location.hostname !== 'localhost' ? '/api' : 'http://localhost:3001/api',
 });
 
 export const getSettings = async () => {

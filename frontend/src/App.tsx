@@ -281,8 +281,9 @@ function App() {
           jiraTicket = result.ticket;
           setMessages((prev) => [...prev, { role: 'jira-ticket', content: '', jiraTicket }]);
         } catch (jiraError: any) {
-          const errObj = jiraError.response?.data?.error;
-          const errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || jiraError.message || 'Jira fetch failed');
+          const errObj = jiraError.response?.data?.error || jiraError.response?.data;
+          let errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || jiraError.message || 'Jira fetch failed');
+          if (typeof errMsg !== 'string') errMsg = JSON.stringify(errMsg);
           setMessages((prev) => [
             ...prev,
             { role: 'error', content: `⚠️ Jira fetch failed: ${errMsg}` },
@@ -310,8 +311,9 @@ function App() {
         return updated;
       });
     } catch (error: any) {
-      const errObj = error.response?.data?.error;
-      const msg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Generation failed');
+      const errObj = error.response?.data?.error || error.response?.data;
+      let msg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Generation failed');
+      if (typeof msg !== 'string') msg = JSON.stringify(msg);
       setMessages((prev) => {
         const updated = [...prev, { role: 'error' as const, content: `Error: ${msg}` }];
         if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));

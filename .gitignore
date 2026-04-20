@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+build/
+
+# Ignore unrelated projects and files
+Project1/
+Project2/
+design/
+gemini_models*
+settings.json

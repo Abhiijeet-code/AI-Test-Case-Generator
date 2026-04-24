@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import Sidebar from './components/Sidebar';
 import type { ChatSession } from './components/Sidebar';
 import SettingsModal from './components/SettingsModal';
-import { generateTestCase, fetchJiraTicket, uploadDocument, exportTestCases } from './api';
+import { generateTestCase, fetchJiraTicket, uploadDocument } from './api';
 
 // Jira ID pattern: PROJECT-123
 const JIRA_ID_REGEX = /^[A-Z][A-Z0-9]+-\d+$/;
@@ -492,22 +492,28 @@ function App() {
             </button>
             <button 
               className="btn-secondary" 
-              onClick={async () => {
+              onClick={() => {
                 const aiMsgs = messages.filter(m => m.role === 'ai' && m.testCases && m.testCases.length > 0);
                 if (aiMsgs.length === 0) return alert('No test cases generated yet to export.');
-                const latestCases = aiMsgs[aiMsgs.length - 1].testCases;
-                
-                try {
-                  const blob = await exportTestCases(latestCases!, 'md');
-                  const url = window.URL.createObjectURL(new Blob([blob]));
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `test_cases_${new Date().toISOString().split('T')[0]}.md`;
-                  a.click();
-                } catch (e) {
-                  console.error(e);
-                  alert('Export failed.');
-                }
+                const latestCases = aiMsgs[aiMsgs.length - 1].testCases!;
+                const jiraId = latestCases[0]?.linked_jira_id || 'custom';
+                const timestamp = new Date().toISOString().split('T')[0];
+                // Generate markdown client-side
+                let md = `# Test Cases for ${jiraId}\n\n`;
+                latestCases.forEach((tc) => {
+                  md += `### ${tc.id}: ${tc.title}\n`;
+                  md += `- **Type**: ${tc.type}\n- **Priority**: ${tc.priority}\n`;
+                  md += `\n**Preconditions**: ${tc.preconditions}\n\n**Steps**:\n`;
+                  const steps = Array.isArray(tc.steps) ? tc.steps : String(tc.steps).split('\n');
+                  steps.forEach((s: string, i: number) => (md += `${i + 1}. ${s}\n`));
+                  md += `\n**Expected Result**: ${tc.expected_result}\n\n---\n\n`;
+                });
+                const url = window.URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${jiraId}_test_cases_${timestamp}.md`;
+                a.click();
+                window.URL.revokeObjectURL(url);
               }}
               title="Export Test Cases to Markdown"
               style={{ padding: '0.5rem', borderRadius: '4px', background: 'var(--bg-3)', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', color: 'var(--text-2)' }}
@@ -516,22 +522,25 @@ function App() {
             </button>
             <button 
               className="btn-secondary" 
-              onClick={async () => {
+              onClick={() => {
                 const aiMsgs = messages.filter(m => m.role === 'ai' && m.testCases && m.testCases.length > 0);
                 if (aiMsgs.length === 0) return alert('No test cases generated yet to export.');
-                const latestCases = aiMsgs[aiMsgs.length - 1].testCases;
-                
-                try {
-                  const blob = await exportTestCases(latestCases!, 'csv');
-                  const url = window.URL.createObjectURL(new Blob([blob]));
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `test_cases_${new Date().toISOString().split('T')[0]}.csv`;
-                  a.click();
-                } catch (e) {
-                  console.error(e);
-                  alert('Export failed.');
-                }
+                const latestCases = aiMsgs[aiMsgs.length - 1].testCases!;
+                const jiraId = latestCases[0]?.linked_jira_id || 'custom';
+                const timestamp = new Date().toISOString().split('T')[0];
+                // Generate CSV client-side
+                const escape = (str: string) => `"${(str || '').replace(/"/g, '""')}"`;
+                let csv = 'ID,Title,Type,Priority,Preconditions,Steps,Test Data,Expected Result\n';
+                latestCases.forEach((tc) => {
+                  const steps = escape(Array.isArray(tc.steps) ? tc.steps.join('\n') : tc.steps);
+                  csv += `${escape(tc.id)},${escape(tc.title)},${escape(tc.type)},${escape(tc.priority)},${escape(tc.preconditions)},${steps},${escape(tc.test_data)},${escape(tc.expected_result)}\n`;
+                });
+                const url = window.URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${jiraId}_test_cases_${timestamp}.csv`;
+                a.click();
+                window.URL.revokeObjectURL(url);
               }}
               title="Export Test Cases to CSV"
               style={{ padding: '0.5rem', borderRadius: '4px', background: 'var(--bg-3)', border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', color: 'var(--text-2)' }}

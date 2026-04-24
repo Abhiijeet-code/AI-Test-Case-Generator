@@ -28,11 +28,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'llm' | 'jira'>('llm');
 
   useEffect(() => {
+    // Load from localStorage first (primary source on Vercel)
+    try {
+      const local = localStorage.getItem('appSettings');
+      if (local) {
+        const parsed = JSON.parse(local);
+        setSettingsState((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch (e) {}
+    // Try backend as secondary source (only on self-hosted deployments)
     getSettings().then((data) => {
       if (data && typeof data === 'object' && !Array.isArray(data)) {
-        setSettingsState((prev) => ({ ...prev, ...data }));
+        // Only use backend values if localStorage doesn't already have them
+        setSettingsState((prev) => {
+          const localHasValues = Object.values(prev).some(v => v !== '');
+          return localHasValues ? prev : { ...prev, ...data };
+        });
       }
-    }).catch(e => console.error('Failed to fetch settings:', e));
+    }).catch(() => { /* expected on Vercel - settings are localStorage-only */ });
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

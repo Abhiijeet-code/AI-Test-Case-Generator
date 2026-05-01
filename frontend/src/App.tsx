@@ -322,7 +322,7 @@ function App() {
       });
       if (useDoc) setDocMeta(null); // clear after successful generation
     } catch (error: any) {
-      const errObj = error.response?.data?.error || error.response?.data;
+      const errObj = error.response?.data?.detail || error.response?.data?.error || error.response?.data;
       let msg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Generation failed');
       if (typeof msg !== 'string') msg = JSON.stringify(msg);
       setMessages((prev) => {

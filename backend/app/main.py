@@ -111,54 +111,60 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.post("/api/generate")
 async def generate_cases(req: GenerateRequest):
-    c = req.config.model_dump() if req.config else {}
-    provider = req.config.activeProvider if req.config and req.config.activeProvider else "groq"
-    
-    context_text = ""
-    jira_id = "DOC_IMPORT"
-    
-    # RAG Retrieval
-    if req.sessionDocId:
-        query = "generate test cases"
-        if req.requirement: query += f" for {req.requirement}"
-        if req.jiraTicket: query += f" context: {req.jiraTicket.summary}"
+    try:
+        c = req.config.model_dump(exclude_none=True) if req.config else {}
+        provider = req.config.activeProvider if req.config and req.config.activeProvider else "groq"
         
-        chunks = faiss_store.search_document(req.sessionDocId, query, top_k=5)
-        if chunks:
-            context_text += "--- Relevant Document Sections ---\n"
-            for ch in chunks:
-                context_text += f"{ch.get('text', '')}\n\n"
-    
-    if req.jiraTicket:
-        jira_id = req.jiraTicket.jiraId
-        context_text += f"--- Jira Ticket {jira_id} ---\n"
-        context_text += f"Summary: {req.jiraTicket.summary}\n"
-        context_text += f"Description: {req.jiraTicket.description}\n"
-        context_text += f"Acceptance Criteria: {req.jiraTicket.acceptanceCriteria}\n"
-        context_text += f"Type: {req.jiraTicket.issueType}, Priority: {req.jiraTicket.priority}\n"
-    
-    if req.requirement:
-        context_text += f"--- Additional Context ---\n{req.requirement}\n"
+        context_text = ""
+        jira_id = "DOC_IMPORT"
         
-    if not context_text:
-        raise HTTPException(status_code=400, detail="No requirement source provided.")
+        # RAG Retrieval
+        if req.sessionDocId:
+            query = "generate test cases"
+            if req.requirement: query += f" for {req.requirement}"
+            if req.jiraTicket: query += f" context: {req.jiraTicket.summary}"
+            
+            chunks = faiss_store.search_document(req.sessionDocId, query, top_k=5)
+            if chunks:
+                context_text += "--- Relevant Document Sections ---\n"
+                for ch in chunks:
+                    context_text += f"{ch.get('text', '')}\n\n"
+        
+        if req.jiraTicket:
+            jira_id = req.jiraTicket.jiraId
+            context_text += f"--- Jira Ticket {jira_id} ---\n"
+            context_text += f"Summary: {req.jiraTicket.summary}\n"
+            context_text += f"Description: {req.jiraTicket.description}\n"
+            context_text += f"Acceptance Criteria: {req.jiraTicket.acceptanceCriteria}\n"
+            context_text += f"Type: {req.jiraTicket.issueType}, Priority: {req.jiraTicket.priority}\n"
+        
+        if req.requirement:
+            context_text += f"--- Additional Context ---\n{req.requirement}\n"
+            
+        if not context_text:
+            raise HTTPException(status_code=400, detail="No requirement source provided.")
 
-    prompt = f"Context:\n{context_text}\n\nGenerate minimum 10 structured test cases based on this."
-    
-    # Generate
-    test_cases = await generate_test_cases(prompt, provider, c, req.template)
-    
-    # Deduplicate and Store
-    final_cases = []
-    for tc in test_cases:
-        tc["linked_jira_id"] = tc.get("linked_jira_id", jira_id)
-        is_dup, existing_tc = faiss_store.add_testcase(tc)
-        tc["_is_duplicate"] = is_dup
-        if is_dup:
-            tc["_duplicate_of"] = existing_tc
-        final_cases.append(tc)
+        prompt = f"Context:\n{context_text}\n\nGenerate minimum 10 structured test cases based on this."
+        
+        # Generate
+        test_cases = await generate_test_cases(prompt, provider, c, req.template)
+        
+        # Deduplicate and Store
+        final_cases = []
+        for tc in test_cases:
+            tc["linked_jira_id"] = tc.get("linked_jira_id", jira_id)
+            is_dup, existing_tc = faiss_store.add_testcase(tc)
+            tc["_is_duplicate"] = is_dup
+            if is_dup:
+                tc["_duplicate_of"] = existing_tc
+            final_cases.append(tc)
 
-    return {"status": "ok", "response": final_cases}
+        return {"status": "ok", "response": final_cases}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
 
 # ─── FAISS Vector Management ───
 

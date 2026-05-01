@@ -5,7 +5,8 @@ import axios from 'axios';
 import multer from 'multer';
 import mammoth from 'mammoth';
 import crypto from 'crypto';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
 dotenv.config();
 
@@ -227,18 +228,9 @@ app.post('/api/documents/upload', upload.single('file'), async (req: Request, re
 
     // ── Parse by type ──
     if (mimetype === 'application/pdf' || ext === 'pdf') {
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
-      const pdfDoc = await loadingTask.promise;
-      pageCount = pdfDoc.numPages;
-      const pageTexts: string[] = [];
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const content = await page.getTextContent();
-        const pageText = content.items.map((item: any) => item.str).join(' ');
-        pageTexts.push(pageText);
-      }
-      text = pageTexts.join('\n');
-      await pdfDoc.destroy();
+      const data = await pdfParse(buffer);
+      text = data.text || '';
+      pageCount = data.numpages;
     } else if (
       mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       ext === 'docx'

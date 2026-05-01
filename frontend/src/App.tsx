@@ -523,7 +523,8 @@ function App() {
                     });
                     e.target.value = '';
                   } catch (err: any) {
-                    const msg = err.response?.data?.error || err.message || 'Failed to upload document.';
+                    const errObj = err.response?.data?.error || err.response?.data || err;
+                    let msg = typeof errObj === 'string' ? errObj : JSON.stringify(errObj);
                     setMessages(prev => [...prev, { role: 'error', content: `📎 Upload failed: ${msg}` }]);
                   } finally {
                     setIsLoading(false); setLoadingStage('');

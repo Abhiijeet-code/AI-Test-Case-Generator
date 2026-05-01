@@ -227,8 +227,7 @@ app.post('/api/documents/upload', upload.single('file'), async (req: Request, re
 
     // ── Parse by type ──
     if (mimetype === 'application/pdf' || ext === 'pdf') {
-      // Use pdfjs-dist (works in Vercel serverless with no filesystem access)
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
       const pdfDoc = await loadingTask.promise;
       pageCount = pdfDoc.numPages;
       const pageTexts: string[] = [];
@@ -303,7 +302,8 @@ app.post('/api/documents/upload', upload.single('file'), async (req: Request, re
       warnings,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to parse document.' });
+    const errorMsg = err instanceof Error ? err.message : (typeof err === 'object' ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : String(err));
+    res.status(500).json({ error: errorMsg || 'Failed to parse document.' });
   }
 });
 

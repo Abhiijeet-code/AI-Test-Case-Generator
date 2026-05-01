@@ -1,7 +1,16 @@
 node_modules/
 dist/
 .env
+.env.*
 build/
+
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 
 # Ignore unrelated projects and files
 Project1/

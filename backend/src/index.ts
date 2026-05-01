@@ -5,7 +5,7 @@ import axios from 'axios';
 import multer from 'multer';
 import mammoth from 'mammoth';
 import crypto from 'crypto';
-const pdfParse = require('pdf-parse');
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 dotenv.config();
 
@@ -227,9 +227,19 @@ app.post('/api/documents/upload', upload.single('file'), async (req: Request, re
 
     // ── Parse by type ──
     if (mimetype === 'application/pdf' || ext === 'pdf') {
-      const data = await pdfParse(buffer);
-      text = data.text || '';
-      pageCount = data.numpages;
+      // Use pdfjs-dist (works in Vercel serverless with no filesystem access)
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+      const pdfDoc = await loadingTask.promise;
+      pageCount = pdfDoc.numPages;
+      const pageTexts: string[] = [];
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map((item: any) => item.str).join(' ');
+        pageTexts.push(pageText);
+      }
+      text = pageTexts.join('\n');
+      await pdfDoc.destroy();
     } else if (
       mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       ext === 'docx'

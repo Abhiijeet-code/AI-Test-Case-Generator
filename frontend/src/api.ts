@@ -18,13 +18,29 @@ export const saveSettings = async (settings: any) => {
   return res.data;
 };
 
-export const generateTestCase = async (requirement: string, jiraTicket?: any, config?: any) => {
-  const res = await api.post('/generate', { requirement, jiraTicket, config });
+export const testLLMConnectionApi = async (provider: string, config: any) => {
+  const res = await api.post('/test-connection', { provider, config });
+  return res.data;
+};
+
+export const testJiraConnectionApi = async (config: any) => {
+  const res = await api.post('/jira/test-connection', { config });
   return res.data;
 };
 
 export const fetchJiraTicket = async (jiraId: string, config?: any) => {
   const res = await api.post('/jira/fetch', { jiraId, config });
+  return res.data;
+};
+
+export const generateTestCase = async (
+  requirement: string,
+  jiraTicket?: any,
+  config?: any,
+  template?: string,
+  sessionDocId?: string
+) => {
+  const res = await api.post('/generate', { requirement, jiraTicket, config, template, sessionDocId });
   return res.data;
 };
 
@@ -34,15 +50,14 @@ export const uploadDocument = async (file: File) => {
   const res = await api.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-  return res.data;
+  return res.data; // Returns metadata only — no raw text
 };
 
-export const exportTestCases = async (testCases: any[], format: string, jiraId?: string) => {
+// Keep for backwards-compat (not used in production export — exports are client-side)
+export const exportTestCasesApi = async (testCases: any[], format: string, jiraId?: string) => {
   const res = await api.post('/testcases/export', { testCases, format, jiraId }, { responseType: 'blob' });
   return res.data;
 };
 
-export const testConnectionApi = async (provider: string, config: any) => {
-  const res = await api.post('/test-connection', { provider, config });
-  return res.data;
-};
+// Renamed export for backward compat
+export const testConnectionApi = testLLMConnectionApi;

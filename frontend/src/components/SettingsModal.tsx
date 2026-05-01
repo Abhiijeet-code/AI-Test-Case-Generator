@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getSettings, saveSettings, testConnectionApi } from '../api';
+import { getSettings, saveSettings, testLLMConnectionApi, testJiraConnectionApi } from '../api';
 import { X, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -25,6 +25,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [saving, setSaving] = useState(false);
   const [testingStatus, setTestingStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [testingMessage, setTestingMessage] = useState('');
+  const [jiraTestStatus, setJiraTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [jiraTestMessage, setJiraTestMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'llm' | 'jira'>('llm');
 
   useEffect(() => {
@@ -73,7 +75,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setTestingStatus('testing');
     setTestingMessage('Testing connection...');
     try {
-      await testConnectionApi(settings.activeProvider, settings);
+      await testLLMConnectionApi(settings.activeProvider, settings);
       setTestingStatus('success');
       setTestingMessage('Connection successful!');
       setTimeout(() => setTestingStatus('idle'), 3000);
@@ -82,6 +84,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       const errObj = error.response?.data?.error;
       const errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Connection failed');
       setTestingMessage(errMsg);
+    }
+  };
+
+  const testJiraConnection = async () => {
+    setJiraTestStatus('testing');
+    setJiraTestMessage('Testing Jira connection...');
+    try {
+      await testJiraConnectionApi(settings);
+      setJiraTestStatus('success');
+      setJiraTestMessage('Jira connection successful!');
+      setTimeout(() => setJiraTestStatus('idle'), 3000);
+    } catch (error: any) {
+      setJiraTestStatus('failed');
+      const errObj = error.response?.data?.error;
+      const errMsg = typeof errObj === 'string' ? errObj : (errObj?.message || error.message || 'Connection failed');
+      setJiraTestMessage(errMsg);
     }
   };
 
@@ -254,6 +272,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               <p className="field-hint">
                 Generate from <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-color)' }}>Atlassian Account Settings</a>
               </p>
+            </div>
+            <div className="test-connection-row">
+              {jiraTestStatus !== 'idle' && (
+                <span className={`test-status ${jiraTestStatus}`}>
+                  {jiraTestStatus === 'testing' && <Loader2 size={13} className="spin" />}
+                  {jiraTestStatus === 'success' && <CheckCircle2 size={13} />}
+                  {jiraTestStatus === 'failed' && <XCircle size={13} />}
+                  {jiraTestMessage}
+                </span>
+              )}
+              <button
+                className="btn-secondary"
+                onClick={testJiraConnection}
+                disabled={jiraTestStatus === 'testing' || !settings.jiraBaseUrl || !settings.jiraEmail || !settings.jiraApiToken}
+              >
+                Test Jira Connection
+              </button>
             </div>
           </div>
         )}

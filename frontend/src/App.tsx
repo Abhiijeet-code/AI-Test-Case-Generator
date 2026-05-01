@@ -144,7 +144,7 @@ function App() {
     ocrApplied: boolean; truncated: boolean;
     warnings: string[]; sessionDocId: string;
   } | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+
   const [conflictDoc, setConflictDoc] = useState<string | null>(null); // pending jiraId when conflict
   const chatEndRef = useRef<HTMLDivElement>(null);
 

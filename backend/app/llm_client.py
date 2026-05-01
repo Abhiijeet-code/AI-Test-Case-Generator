@@ -10,7 +10,9 @@ def build_system_prompt(template: str) -> str:
     base = (
         "You are an expert QA Engineer. Generate test cases based on the provided requirement context. "
         "Output strictly valid JSON with no markdown block formatting or extra text. "
-        "The output must be a JSON array of objects. Each object must have these keys: "
+        "The output must be a JSON object with a single key 'test_cases' containing an array of test case objects. "
+        "Example format: {\"test_cases\": [{...}, {...}]}. "
+        "Each test case object must have these keys: "
         "'id' (string), 'title' (string), 'type' (string), 'priority' (string), 'preconditions' (string), "
         "'steps' (string, use newline for steps), 'test_data' (string), 'expected_result' (string)."
     )

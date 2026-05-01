@@ -3,7 +3,7 @@ import io
 import json
 import uuid
 import zipfile
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from typing import Dict, Any, List
@@ -54,8 +54,13 @@ def save_settings(settings: dict):
 
 @app.post("/api/test-connection")
 async def test_llm_conn(req: TestConnectionRequest):
-    await test_llm_connection(req.provider, req.config.model_dump())
-    return {"status": "ok", "message": "Connection successful"}
+    try:
+        # Pass raw dict so flat keys (groqApiKey, etc.) are preserved
+        config = req.config.model_dump(exclude_none=True)
+        await test_llm_connection(req.provider, config)
+        return {"status": "ok", "message": "Connection successful"}
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 @app.post("/api/jira/test-connection")
 async def test_jira_conn(req: JiraTestConnectionRequest):

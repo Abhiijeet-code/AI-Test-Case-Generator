@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
 class ConfigPayload(BaseModel):
+    model_config = {"extra": "allow"}  # accept flat keys: groqApiKey, groqModel, etc.
+
     jiraBaseUrl: Optional[str] = None
     jiraEmail: Optional[str] = None
     jiraApiToken: Optional[str] = None

@@ -22,17 +22,54 @@ def build_system_prompt(template: str) -> str:
         base += " Focus on authentication, authorization, injection flaws, and security concerns."
     return base
 
+
+def _resolve_config(provider: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalise the config dict regardless of whether the frontend sent a flat
+    shape (groqApiKey / groqModel / …) or the nested providers.{provider}.* shape.
+
+    Returns a simple dict: { "apiKey": "...", "model": "...", "baseUrl": "..." }
+    """
+    p = provider.lower()
+
+    # ── nested shape: config.providers.groq.apiKey  ────────────────────────
+    providers = config.get("providers", {}) or {}
+    nested = providers.get(p, {}) or {}
+
+    # ── flat shape: config.groqApiKey / config.groqModel  ──────────────────
+    flat_key_map = {
+        "groq":        ("groqApiKey",      "groqModel",         None),
+        "openai":      ("openAiApiKey",    "openAiModel",       None),
+        "gemini":      ("geminiApiKey",    "geminiModel",       None),
+        "claude":      ("claudeApiKey",    "claudeModel",       None),
+        "openrouter":  ("openRouterApiKey","openRouterModel",   None),
+        "ollama":      (None,              "ollamaModel",       "ollamaUrl"),
+        "lmstudio":    (None,              "lmStudioModel",     "lmStudioUrl"),
+    }
+
+    key_field, model_field, url_field = flat_key_map.get(p, (None, None, None))
+
+    api_key  = nested.get("apiKey")  or (config.get(key_field)   if key_field  else None)
+    model    = nested.get("model")   or (config.get(model_field) if model_field else None)
+    base_url = nested.get("baseUrl") or (config.get(url_field)   if url_field  else None)
+
+    return {"apiKey": api_key, "model": model, "baseUrl": base_url}
+
+
 async def generate_test_cases(prompt: str, provider: str, config: Dict[str, Any], template: str = "Functional") -> List[Dict[str, Any]]:
     system_prompt = build_system_prompt(template)
-    providers_config = config.get("providers", {})
-    
     provider_lower = provider.lower()
-    
+    resolved = _resolve_config(provider_lower, config)
+
+    api_key  = resolved.get("apiKey")
+    model    = resolved.get("model")
+    base_url = resolved.get("baseUrl")
+
     try:
         if provider_lower == "groq":
-            api_key = providers_config.get("groq", {}).get("apiKey")
-            model = providers_config.get("groq", {}).get("model", "mixtral-8x7b-32768")
-            if not api_key: raise Exception("Groq API key missing")
+            if not api_key:
+                raise ValueError("Groq API key is missing. Please set it in Settings.")
+            model = model or "llama-3.3-70b-versatile"
             client = groq.AsyncGroq(api_key=api_key)
             completion = await client.chat.completions.create(
                 model=model,

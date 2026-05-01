@@ -523,7 +523,7 @@ function App() {
                     });
                     e.target.value = '';
                   } catch (err: any) {
-                    const errObj = err.response?.data?.error || err.response?.data || err;
+                    const errObj = err.response?.data?.detail || err.response?.data?.error || err.response?.data || err;
                     let msg = typeof errObj === 'string' ? errObj : JSON.stringify(errObj);
                     setMessages(prev => [...prev, { role: 'error', content: `📎 Upload failed: ${msg}` }]);
                   } finally {

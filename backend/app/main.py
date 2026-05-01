@@ -16,7 +16,7 @@ from app.models import (
     VectorSearchRequest,
     ConfigPayload
 )
-from app.faiss_store import faiss_store
+from app.vector_store import faiss_store
 from app.document_parser import parse_document
 from app.jira_client import fetch_jira_issue, test_jira_connection
 from app.llm_client import generate_test_cases, test_llm_connection

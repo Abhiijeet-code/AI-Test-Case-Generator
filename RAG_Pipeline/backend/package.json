@@ -1,0 +1,26 @@
+{
+  "name": "rag-pipeline-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Advanced RAG Explorer backend",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^4.1.0",
+    "cohere-ai": "^7.14.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "groq-sdk": "^0.15.0",
+    "multer": "^1.4.5-lts.1",
+    "papaparse": "^5.4.1",
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

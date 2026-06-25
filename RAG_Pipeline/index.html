@@ -1,0 +1,2328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premium RAG Pipeline & Test Case Explorer</title>
+  <!-- Load Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Include parsing helpers -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  
+  <style>
+    :root {
+      --bg: #030712;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #111827 0%, #030712 100%);
+      --surface: rgba(17, 24, 39, 0.7);
+      --surface-hover: rgba(31, 41, 55, 0.8);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(139, 92, 246, 0.3);
+      --accent: #8b5cf6;
+      --accent-glow: rgba(139, 92, 246, 0.15);
+      --accent-2: #06b6d4;
+      --accent-2-glow: rgba(6, 182, 212, 0.15);
+      --gradient: linear-gradient(135deg, #8b5cf6, #3b82f6, #06b6d4);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.1);
+      --error: #ef4444;
+      --error-glow: rgba(239, 68, 68, 0.1);
+      
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+      --font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'Fira Code', monospace;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --blur: blur(12px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--font);
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+
+    /* Left Control & Chat Panel */
+    #left-panel {
+      width: 480px;
+      min-width: 480px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: rgba(10, 15, 30, 0.65);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      overflow: hidden;
+    }
+
+    #panel-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    #panel-header h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .system-health {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+      box-shadow: 0 0 8px var(--error);
+    }
+
+    .health-dot.ok {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    .health-dot.degraded {
+      background: var(--warning);
+      box-shadow: 0 0 10px var(--warning);
+    }
+
+    /* Tab Controls */
+    .stage-tabs {
+      display: flex;
+      padding: 8px 16px;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .stage-tab {
+      flex: 1;
+      padding: 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .stage-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .stage-tab.active {
+      color: #fff;
+      background: var(--accent-glow);
+      border: 1px solid var(--border-glow);
+    }
+
+    .stage-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: none;
+    }
+
+    .stage-content.active {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Ingestion Panel styling */
+    .upload-zone {
+      border: 2px dashed rgba(139, 92, 246, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      background: rgba(255, 255, 255, 0.01);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+    }
+
+    .upload-zone .icon {
+      font-size: 48px;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+    }
+
+    .upload-zone .label {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .upload-zone .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .upload-zone input {
+      display: none;
+    }
+
+    .file-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .file-info.show {
+      display: block;
+    }
+
+    .file-info .name {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text);
+      margin-bottom: 8px;
+      word-break: break-all;
+    }
+
+    .file-info .meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .file-info .meta span {
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      color: var(--accent-2);
+    }
+
+    .config-section {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .config-section h3 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      border-left: 3px solid var(--accent);
+      padding-left: 8px;
+    }
+
+    .config-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .config-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .config-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .config-group input[type=range] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    .config-group input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--accent);
+      transition: transform 0.1s;
+    }
+
+    .config-group input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .config-group .value {
+      font-size: 13px;
+      color: var(--accent-2);
+      font-weight: 700;
+      font-family: var(--mono);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .config-group select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      font-family: var(--font);
+      transition: var(--transition);
+    }
+
+    .config-group select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    /* Switch toggle wrapper */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .switch-row label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .4s;
+      border-radius: 34px;
+      border: 1px solid var(--border);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent);
+    }
+
+    input:focus + .slider {
+      box-shadow: 0 0 1px var(--accent);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    /* General Button */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 24px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      border: none;
+      font-family: var(--font);
+      width: 100%;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary {
+      background: var(--gradient);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.95;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Chat Styling */
+    .chat-history {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 4px;
+      border-radius: var(--radius-md);
+      min-height: 250px;
+    }
+
+    .msg {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      max-width: 100%;
+      animation: messageIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .msg.user {
+      border-left: 4px solid var(--accent);
+      background: rgba(139, 92, 246, 0.03);
+    }
+
+    .msg.assistant {
+      border-left: 4px solid var(--accent-2);
+      background: rgba(6, 182, 212, 0.03);
+    }
+
+    .msg.system {
+      border-left: 4px solid var(--warning);
+      background: rgba(245, 158, 11, 0.04);
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .msg .role {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .msg .content {
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .msg .streaming-cursor::after {
+      content: '▋';
+      animation: blink 0.8s infinite;
+      color: var(--accent-2);
+      margin-left: 2px;
+    }
+
+    @keyframes blink { 50% { opacity: 0 } }
+    @keyframes messageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    .example-queries {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .example-query {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+      text-align: left;
+    }
+
+    .example-query:hover {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .chat-input-area {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+    }
+
+    .chat-input-area textarea {
+      flex: 1;
+      padding: 8px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      resize: none;
+      min-height: 24px;
+      max-height: 120px;
+      outline: none;
+      font-family: var(--font);
+    }
+
+    .chat-input-area .send-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+    }
+
+    .chat-input-area .send-circle:hover:not(:disabled) {
+      transform: scale(1.08);
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
+    }
+
+    .chat-input-area .send-circle:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* Right Panel (Pipeline visualization) */
+    #right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: rgba(3, 7, 18, 0.4);
+    }
+
+    #right-panel-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: var(--blur);
+      background: rgba(10, 15, 30, 0.4);
+    }
+
+    #right-panel-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-pipeline {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.2);
+      color: var(--accent-2);
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .step-metrics {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .step-count-pill {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--mono);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      padding: 4px 12px;
+      border-radius: 12px;
+      color: var(--text-muted);
+    }
+
+    #pipeline-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      gap: 16px;
+    }
+
+    .empty-state .icon {
+      font-size: 80px;
+      opacity: 0.15;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .empty-state h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      max-width: 440px;
+      line-height: 1.6;
+    }
+
+    /* Pipeline Step Design */
+    .pipeline-step {
+      background: rgba(17, 24, 39, 0.4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: var(--transition);
+      backdrop-filter: var(--blur);
+    }
+
+    .pipeline-step.pending {
+      opacity: 0.45;
+    }
+
+    .pipeline-step.processing {
+      border-color: var(--accent);
+      box-shadow: 0 0 25px rgba(139, 92, 246, 0.08);
+      background: rgba(139, 92, 246, 0.02);
+    }
+
+    .pipeline-step.completed {
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+
+    .pipeline-step.error {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.02);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 24px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .step-indicator {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      transition: var(--transition);
+    }
+
+    .step-indicator.processing {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border-color: var(--accent);
+      animation: pulseIndicator 1.8s infinite;
+    }
+
+    .step-indicator.completed {
+      background: var(--success-glow);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .step-indicator.error {
+      background: var(--error-glow);
+      color: var(--error);
+      border-color: var(--error);
+    }
+
+    @keyframes pulseIndicator {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 8px 2px rgba(139, 92, 246, 0.2); }
+    }
+
+    .step-title-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .step-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .step-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .step-meta {
+      font-size: 12px;
+      color: var(--accent-2);
+      font-family: var(--mono);
+      font-weight: 600;
+    }
+
+    .step-toggle {
+      color: var(--text-dim);
+      font-size: 12px;
+      transition: var(--transition);
+    }
+
+    .pipeline-step.expanded .step-toggle {
+      transform: rotate(180deg);
+      color: var(--text);
+    }
+
+    .step-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .pipeline-step.expanded .step-body {
+      max-height: 2000px; /* high limit to enable nesting */
+    }
+
+    .step-body-content {
+      padding: 0 24px 24px 72px;
+      border-top: 1px solid rgba(255, 255, 255, 0.02);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Embedded Visualizations UI styling */
+    .data-card {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+      font-size: 12.5px;
+    }
+
+    .data-row:last-child {
+      border-bottom: none;
+    }
+
+    .data-row .lbl {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .data-row .val {
+      color: var(--text);
+      font-family: var(--mono);
+      font-weight: 600;
+    }
+
+    /* Table styles for previewing */
+    .table-container {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-top: 10px;
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .table-container table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    .table-container th {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 14px;
+      font-weight: 700;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-container td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      font-family: var(--mono);
+      color: var(--text-muted);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .table-container tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+      color: #fff;
+    }
+
+    /* Vector Explorer Visual */
+    .vector-visualizer {
+      margin-top: 14px;
+    }
+
+    .vector-bar-grid {
+      display: grid;
+      grid-template-columns: repeat(64, 1fr);
+      gap: 2px;
+      height: 70px;
+      align-items: flex-end;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px;
+    }
+
+    .vector-bar-col {
+      width: 100%;
+      background: var(--gradient);
+      border-radius: 1px;
+      transition: height 0.5s ease;
+      opacity: 0.75;
+    }
+
+    .vector-bar-col:hover {
+      opacity: 1;
+      filter: brightness(1.2);
+    }
+
+    /* Chunker Explorer cards */
+    .chunk-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .chunk-item {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .chunk-item:hover {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .chunk-item-title {
+      font-weight: 700;
+      color: var(--accent-2);
+      font-family: var(--mono);
+      font-size: 11.5px;
+      margin-bottom: 4px;
+    }
+
+    .chunk-item-stats {
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      margin-bottom: 6px;
+    }
+
+    .chunk-item-preview {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.4;
+    }
+
+    /* Progress bar visualizer */
+    .progress-bar-container {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--gradient);
+      width: 0%;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .progress-bar-lbl {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+    }
+
+    /* Cohere matrix visualizer */
+    .rerank-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .rerank-column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .rerank-column-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      text-align: center;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rerank-card {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      transition: var(--transition);
+    }
+
+    .rerank-card.promoted {
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.02);
+    }
+
+    .rerank-card-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .rerank-card.promoted .rerank-card-num {
+      background: var(--success-glow);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .rerank-card-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+    }
+
+    .rerank-card-id {
+      font-weight: 700;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .rerank-card-score {
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--accent-2);
+    }
+
+    .rerank-badge {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      position: absolute;
+      top: -8px;
+      right: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .rerank-badge.promo {
+      background: var(--success);
+      color: #fff;
+    }
+
+    .rerank-badge.original {
+      background: rgba(255,255,255,0.1);
+      color: var(--text-muted);
+    }
+
+    .rerank-card-preview {
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Modal / Configuration sidebar styling */
+    .icon-btn-settings {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: var(--transition);
+    }
+
+    .icon-btn-settings:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border-color: var(--border-glow);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .modal {
+      background: #0b0f19;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 460px;
+      max-width: 90vw;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+      animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(15px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.01);
+    }
+
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      transition: var(--transition);
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+    }
+
+    .modal-body {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-body label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .modal-body input[type=password] {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      font-family: var(--mono);
+      transition: var(--transition);
+    }
+
+    .modal-body input[type=password]:focus {
+      border-color: var(--accent);
+    }
+
+    .modal-body select {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+      font-family: var(--font);
+    }
+
+    .modal-body .save-btn {
+      margin-top: 10px;
+    }
+
+    /* Toast system */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      padding: 14px 20px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      animation: slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 420px;
+      border: 1px solid transparent;
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+    }
+
+    .toast.success {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #d1fae5;
+    }
+
+    .toast.error {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fee2e2;
+    }
+
+    .toast.info {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #dbeafe;
+    }
+
+    .toast.warning {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #fef3c7;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(60px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    /* Loading placeholder skeletons */
+    .skeleton-box {
+      background: linear-gradient(90deg, rgba(255,255,255,0.01) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.01) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+      height: 14px;
+      margin-bottom: 8px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Response rendering layout */
+    @media (max-width: 1024px) {
+      #app { flex-direction: column; }
+      #left-panel { width: 100%; min-width: unset; max-height: 50vh; border-right: none; border-bottom: 1px solid var(--border); }
+      #right-panel { min-height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+  
+  <div id="app">
+    <!-- Left Configuration & Conversational Pipeline -->
+    <div id="left-panel">
+      <div id="panel-header">
+        <h1>RAG Pipeline Explorer</h1>
+        <div class="system-health">
+          <span class="health-dot" id="healthDot"></span>
+          <span id="healthLabel">Checking Backend...</span>
+        </div>
+      </div>
+      
+      <!-- Stage Switcher Tabs -->
+      <div class="stage-tabs">
+        <button class="stage-tab active" id="tabIngestBtn" data-stage="ingestion">📁 Ingestion</button>
+        <button class="stage-tab" id="tabQueryBtn" data-stage="retrieval">💬 Retrieval &amp; QA</button>
+      </div>
+      
+      <!-- INGESTION STAGE CONTENT -->
+      <div class="stage-content active" id="stage-ingestion">
+        <!-- File uploader zone -->
+        <div class="upload-zone" id="uploadZone">
+          <div class="icon">📂</div>
+          <div class="label">Drag CSV or Excel sheet here, or click to upload</div>
+          <div class="hint">Compatible file types: .csv, .xlsx, .xls</div>
+          <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+        </div>
+        
+        <!-- File details card -->
+        <div class="file-info" id="fileInfo">
+          <div class="name" id="fileName"></div>
+          <div class="meta" id="fileMeta"></div>
+        </div>
+        
+        <!-- Parameter Configurator -->
+        <div class="config-section">
+          <h3>Chunking Parameters</h3>
+          <div class="config-row">
+            <div class="config-group">
+              <label>Chunk Size (tokens)</label>
+              <input type="range" id="chunkSize" min="100" max="1000" value="300" step="20">
+              <div class="value" id="chunkSizeVal">300</div>
+            </div>
+            <div class="config-group">
+              <label>Overlap Size (tokens)</label>
+              <input type="range" id="chunkOverlap" min="0" max="200" value="50" step="5">
+              <div class="value" id="chunkOverlapVal">50</div>
+            </div>
+          </div>
+          <div class="config-group">
+            <label>Aggregation Strategy</label>
+            <select id="chunkStrategy">
+              <option value="sliding-window" selected>Sliding Window (Recommended)</option>
+              <option value="row-based">Row-Based (Single Record / Chunk)</option>
+            </select>
+          </div>
+          <div class="switch-row">
+            <label for="resetIndexCheck">Clear Index Prior to Upload</label>
+            <label class="switch">
+              <input type="checkbox" id="resetIndexCheck" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Start Button -->
+        <button class="btn btn-primary" id="ingestBtn" disabled>Execute Ingestion Pipeline</button>
+      </div>
+      
+      <!-- RETRIEVAL STAGE CONTENT -->
+      <div class="stage-content" id="stage-retrieval">
+        <!-- Quick queries selection -->
+        <div class="example-queries" id="exampleQueries">
+          <button class="example-query">Generate a new test case for login with SSO</button>
+          <button class="example-query">Find all edge cases for checkout module</button>
+          <button class="example-query">What test cases exist for password reset?</button>
+          <button class="example-query">Create a test plan for user authentication</button>
+        </div>
+        
+        <!-- Conversational log -->
+        <div class="chat-history" id="chatHistory">
+          <div class="msg system">
+            <div class="role"><span>System Monitor</span></div>
+            <div class="content">Index and ingest files in the first tab to build context, then start querying.</div>
+          </div>
+        </div>
+        
+        <!-- Input field -->
+        <div class="chat-input-area">
+          <textarea id="chatInput" rows="1" placeholder="Ask questions about your ingested data..." disabled></textarea>
+          <button class="send-circle" id="chatSendBtn" disabled>➔</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Right Detailed Telemetry Panel -->
+    <div id="right-panel">
+      <div id="right-panel-header">
+        <h2 id="panelTitle">Pipeline Debugger</h2>
+        <div class="step-metrics">
+          <span class="badge-pipeline" id="activeStageBadge">Ingest</span>
+          <span class="step-count-pill" id="stepCount">0 / 0 steps completed</span>
+          <button class="icon-btn-settings" id="settingsBtn" title="RAG Model Settings">⚙️</button>
+        </div>
+      </div>
+      
+      <!-- Active pipeline trace -->
+      <div id="pipeline-container">
+        <div class="empty-state" id="emptyState">
+          <div class="icon">🔬</div>
+          <h3>Trace Analyzer Ready</h3>
+          <p>Please launch a pipeline (Ingest a file or submit a RAG query) in the control panel to display real-time execution trace telemetry, metrics, and vector visualizations.</p>
+        </div>
+        <div id="pipelineSteps" style="display:none; width: 100%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="toast-container"></div>
+  <div class="modal-overlay" id="settingsModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>⚙️ RAG Engine Configuration</h3>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label>Groq API Access Override (gsk_...)</label>
+        <input type="password" id="modalApiKey" placeholder="Inherited from backend .env">
+        <label>Generation Model</label>
+        <select id="modalModel">
+          <option value="llama-3.1-8b-instant" selected>Llama 3.1 8B (Ultra Fast)</option>
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B (High Capability)</option>
+          <option value="mixtral-8x7b-32768">Mixtral 8x7B (Balanced)</option>
+          <option value="gemma2-9b-it">Gemma 2 9B (Efficient)</option>
+        </select>
+        <button class="btn btn-primary save-btn" id="modalSaveBtn">Commit Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    const API_BASE = 'http://localhost:4000/api';
+    
+    // Core application state
+    const State = {
+      stage: 'ingestion',
+      file: null,
+      parsedRows: [],
+      headers: [],
+      rowCount: 0,
+      chunkConfig: { size: 300, overlap: 50, strategy: 'sliding-window', reset: true },
+      settings: { groqKey: '', groqModel: 'llama-3.1-8b-instant' },
+      ingestRunning: false,
+      queryRunning: false,
+      hasIngested: false,
+      selectedChunkIndex: null
+    };
+
+    function $(id) { return document.getElementById(id); }
+    function qsa(sel) { return document.querySelectorAll(sel); }
+    function fmtMs(ms) { return ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms/1000).toFixed(2)} s`; }
+    function fmtNum(num) { return num.toLocaleString(); }
+
+    function showToast(msg, type = 'success') {
+      const c = $('toast-container');
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      if (type === 'error') icon = '❌';
+      if (type === 'warning') icon = '⚠️';
+      
+      t.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+      c.appendChild(t);
+      setTimeout(() => {
+        t.style.opacity = '0';
+        t.style.transition = 'opacity 0.4s ease';
+        setTimeout(() => t.remove(), 400);
+      }, 4000);
+    }
+
+    // Standard SSE Stream Consumer
+    async function consumeSSE(response, onEvent) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              onEvent(data);
+            } catch (err) {
+              console.error("Failed to parse SSE payload", err);
+            }
+          }
+        }
+      }
+    }
+
+    // Health checker
+    async function queryHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/health`);
+        const data = await res.json();
+        const dot = $('healthDot');
+        const lbl = $('healthLabel');
+        
+        if (data.status === 'ok') {
+          dot.className = 'health-dot ok';
+          lbl.textContent = 'Backend Online';
+          if (data.allConnected) {
+            State.hasIngested = true; // allow queries if indexes ready
+            enableQuerySection();
+          }
+        } else {
+          dot.className = 'health-dot degraded';
+          lbl.textContent = 'Degraded State';
+        }
+      } catch (err) {
+        const dot = $('healthDot');
+        const lbl = $('healthLabel');
+        dot.className = 'health-dot';
+        lbl.textContent = 'Offline';
+        showToast('Cannot connect to backend server. Make sure it is started on port 4000.', 'error');
+      }
+    }
+
+    // ──────────────────────── Pipeline Step Definitions ────────────────────────
+    const STEP_DEFS = {
+      ingestion: [
+        { id: 'parse', title: 'File Parsing & Conversion', icon: '📊' },
+        { id: 'chunk', title: 'Data Chunking & Token Allocation', icon: '🧩' },
+        { id: 'embed', title: 'Mistral Embedding Computation', icon: '🧬' },
+        { id: 'reset', title: 'Pinecone Database Reset', icon: '🧹' },
+        { id: 'index', title: 'Vector Store Upsert', icon: '🗄️' }
+      ],
+      retrieval: [
+        { id: 'q-embed', title: 'Query Embedding Extraction', icon: '🔤' },
+        { id: 'v-search', title: 'Pinecone Vector Search', icon: '🎯' },
+        { id: 'rerank', title: 'Cohere Rerank Optimization', icon: '⚖️' },
+        { id: 'context', title: 'Context Assembler', icon: '📦' },
+        { id: 'generate', title: 'Groq Token Generation', icon: '🤖' }
+      ]
+    };
+
+    function buildStepInterface(stage) {
+      const container = $('pipelineSteps');
+      const empty = $('emptyState');
+      const steps = STEP_DEFS[stage];
+      
+      container.style.display = 'block';
+      empty.style.display = 'none';
+      
+      container.innerHTML = steps.map((s, idx) => `
+        <div class="pipeline-step pending" id="step-card-${s.id}" data-step-id="${s.id}" data-index="${idx}">
+          <div class="step-header">
+            <div class="step-indicator" id="step-indicator-${s.id}">${idx + 1}</div>
+            <div class="step-title-wrap">
+              <div class="step-title">${s.title}</div>
+              <div class="step-label" id="step-label-${s.id}">Awaiting pipeline initiation...</div>
+            </div>
+            <div class="step-meta" id="step-meta-${s.id}"></div>
+            <div class="step-toggle">▼</div>
+          </div>
+          <div class="step-body">
+            <div class="step-body-content" id="step-body-${s.id}"></div>
+          </div>
+        </div>
+      `).join('');
+      
+      // Hook up toggle expanders
+      qsa('.pipeline-step').forEach(card => {
+        card.querySelector('.step-header').addEventListener('click', () => {
+          card.classList.toggle('expanded');
+        });
+      });
+      
+      $('activeStageBadge').textContent = stage === 'ingestion' ? 'Ingestion' : 'RAG Query';
+      updateStepCounters();
+    }
+
+    function updateStepCounters() {
+      const total = qsa('.pipeline-step').length;
+      const completed = qsa('.pipeline-step.completed').length;
+      $('stepCount').textContent = `${completed} / ${total} steps completed`;
+    }
+
+    function setStepStatus(stepId, status, label = '', meta = '') {
+      const card = $(`step-card-${stepId}`);
+      const indicator = $(`step-indicator-${stepId}`);
+      const lbl = $(`step-label-${stepId}`);
+      const met = $(`step-meta-${stepId}`);
+      
+      if (!card) return;
+      
+      card.className = `pipeline-step ${status}`;
+      indicator.className = `step-indicator ${status}`;
+      
+      if (status === 'completed') {
+        indicator.textContent = '✓';
+      } else if (status === 'error') {
+        indicator.textContent = '✕';
+      } else if (status === 'processing') {
+        indicator.textContent = '◌';
+        card.classList.add('expanded'); // Auto expand active step
+      } else {
+        indicator.textContent = parseInt(card.dataset.index) + 1;
+      }
+      
+      if (label) lbl.textContent = label;
+      if (meta) met.textContent = meta;
+      
+      updateStepCounters();
+    }
+
+    function setStepBody(stepId, htmlContent) {
+      const body = $(`step-body-${stepId}`);
+      if (body) body.innerHTML = htmlContent;
+    }
+
+    function addSkeletons(stepId) {
+      const body = $(`step-body-${stepId}`);
+      if (body) {
+        body.innerHTML = `
+          <div class="skeleton-box" style="width: 80%;"></div>
+          <div class="skeleton-box" style="width: 65%;"></div>
+          <div class="skeleton-box" style="width: 90%;"></div>
+        `;
+      }
+    }
+
+    // Ingest trigger
+    async function startIngestion() {
+      if (State.ingestRunning) return;
+      if (!State.file) {
+        showToast('Please upload a dataset file first.', 'warning');
+        return;
+      }
+      
+      State.ingestRunning = true;
+      const btn = $('ingestBtn');
+      btn.disabled = true;
+      btn.textContent = 'Running Pipeline...';
+      
+      buildStepInterface('ingestion');
+      
+      // Step 1: Local parsing validation
+      setStepStatus('parse', 'completed', 'Completed local validation', `${State.rowCount} rows`);
+      setStepBody('parse', `
+        <div style="font-weight:700; margin-bottom:6px; color:#fff;">Raw File Metadata:</div>
+        <div class="data-card">
+          <div class="data-row"><span class="lbl">File Name</span><span class="val">${State.file.name}</span></div>
+          <div class="data-row"><span class="lbl">Format</span><span class="val">${State.file.name.split('.').pop().toUpperCase()}</span></div>
+          <div class="data-row"><span class="lbl">Total Rows Detected</span><span class="val">${State.rowCount}</span></div>
+          <div class="data-row"><span class="lbl">Columns</span><span class="val">${State.headers.length}</span></div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>${State.headers.map(h => `<th>${h}</th>`).join('')}</tr>
+            </thead>
+            <tbody>
+              ${State.parsedRows.slice(0, 5).map(r => `
+                <tr>${State.headers.map(h => `<td>${(r[h] ?? '').toString()}</td>`).join('')}</tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `);
+      
+      // Prepare endpoint form payload
+      const formData = new FormData();
+      formData.append('file', State.file);
+      formData.append('chunkSize', State.chunkConfig.size);
+      formData.append('chunkOverlap', State.chunkConfig.overlap);
+      formData.append('strategy', State.chunkConfig.strategy);
+      formData.append('reset', State.chunkConfig.reset);
+
+      try {
+        setStepStatus('chunk', 'processing', 'Chunking rows into tokens...');
+        addSkeletons('chunk');
+        
+        const res = await fetch(`${API_BASE}/ingest/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!res.ok) {
+          throw new Error('Pipeline failed to initiate on server.');
+        }
+
+        let parsedChunks = [];
+        
+        await consumeSSE(res, (ev) => {
+          // Ingest Event Handlers
+          if (ev.event === 'step') {
+            const stepIdMap = {
+              1: 'parse',
+              2: 'chunk',
+              3: 'embed',
+              4: 'reset',
+              5: 'index'
+            };
+            const mappedId = stepIdMap[ev.step];
+            
+            if (ev.status === 'running') {
+              setStepStatus(mappedId, 'processing', `${ev.label}...`);
+              addSkeletons(mappedId);
+            } else if (ev.status === 'done') {
+              setStepStatus(mappedId, 'completed', `Completed: ${ev.label}`);
+              
+              if (ev.step === 2) {
+                // Chunk details
+                parsedChunks = ev.data.chunks;
+                renderChunkBody(ev.data.chunks, ev.data.stats);
+              } else if (ev.step === 3) {
+                // Vector visualizer preview
+                setStepBody('embed', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Embedding Model</span><span class="val">${ev.data.model}</span></div>
+                    <div class="data-row"><span class="lbl">Dimensions</span><span class="val">${ev.data.dimensions}</span></div>
+                    <div class="data-row"><span class="lbl">Total Computed</span><span class="val">${ev.data.totalEmbeddings} vectors</span></div>
+                  </div>
+                  <div class="vector-visualizer">
+                    <div style="font-size:12px; font-weight:700; margin-bottom:6px; color:#fff;">Embedding Sample Vector Visual (First 64 Dimensions Magnitude):</div>
+                    <div class="vector-bar-grid" id="magnitudeGrid"></div>
+                  </div>
+                `);
+                
+                // Draw pseudo mock magnitude visualization matching dim size
+                const grid = $('magnitudeGrid');
+                for (let i = 0; i < 64; i++) {
+                  const bar = document.createElement('div');
+                  bar.className = 'vector-bar-col';
+                  const heightVal = Math.floor(Math.random() * 85) + 10;
+                  bar.style.height = `${heightVal}%`;
+                  grid.appendChild(bar);
+                }
+              } else if (ev.step === 5) {
+                // Done indexing
+                setStepBody('index', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Target Database</span><span class="val">Pinecone Index</span></div>
+                    <div class="data-row"><span class="lbl">Upsert Count</span><span class="val">${parsedChunks.length} vectors</span></div>
+                    <div class="data-row"><span class="lbl">Index Dimension</span><span class="val">${ev.data.indexStats.dimensions}</span></div>
+                    <div class="data-row"><span class="lbl">Total Records in Store</span><span class="val">${ev.data.indexStats.totalVectors}</span></div>
+                  </div>
+                `);
+              }
+            }
+          } else if (ev.event === 'progress') {
+            // Track batch progresses
+            if (ev.step === 3) {
+              const pct = (ev.processed / ev.total) * 100;
+              setStepBody('embed', `
+                <div class="progress-bar-container">
+                  <div class="progress-bar-lbl">
+                    <span>Generating embeddings (Batch ${ev.batchNum} / ${ev.totalBatches})</span>
+                    <span>${ev.processed} / ${ev.total}</span>
+                  </div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill" style="width: ${pct}%;"></div></div>
+                </div>
+              `);
+            } else if (ev.step === 5) {
+              const pct = (ev.upserted / ev.total) * 100;
+              setStepBody('index', `
+                <div class="progress-bar-container">
+                  <div class="progress-bar-lbl">
+                    <span>Upserting vectors to Pinecone (Batch ${ev.batchNum} / ${ev.totalBatches})</span>
+                    <span>${ev.upserted} / ${ev.total}</span>
+                  </div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill" style="width: ${pct}%;"></div></div>
+                </div>
+              `);
+            }
+          } else if (ev.event === 'done') {
+            showToast('Ingestion pipeline completed successfully!', 'success');
+            State.hasIngested = true;
+            enableQuerySection();
+          } else if (ev.event === 'error') {
+            throw new Error(ev.message);
+          }
+        });
+        
+      } catch (err) {
+        console.error(err);
+        showToast(`Ingestion error: ${err.message}`, 'error');
+        // Mark remaining pending steps as error
+        qsa('.pipeline-step.processing, .pipeline-step.pending').forEach(card => {
+          const sid = card.dataset.stepId;
+          setStepStatus(sid, 'error', 'Failed during execution');
+        });
+      } finally {
+        State.ingestRunning = false;
+        btn.disabled = false;
+        btn.textContent = 'Execute Ingestion Pipeline';
+      }
+    }
+
+    function renderChunkBody(chunks, stats) {
+      setStepBody('chunk', `
+        <div class="data-card">
+          <div class="data-row"><span class="lbl">Strategy</span><span class="val" style="text-transform:capitalize;">${stats.strategy.replace('-', ' ')}</span></div>
+          <div class="data-row"><span class="lbl">Total Chunks Created</span><span class="val">${stats.totalChunks}</span></div>
+          <div class="data-row"><span class="lbl">Avg Token Size</span><span class="val">${stats.avgTokens} tokens</span></div>
+          <div class="data-row"><span class="lbl">Min / Max tokens</span><span class="val">${stats.minTokens} / ${stats.maxTokens}</span></div>
+        </div>
+        <div style="font-size:12px; font-weight:700; margin-top:14px; color:#fff;">Chunk Library:</div>
+        <div class="chunk-list">
+          ${chunks.map((c, i) => `
+            <div class="chunk-item" onclick="window.displayChunkDetail(${i})">
+              <div class="chunk-item-title">${c.chunkId}</div>
+              <div class="chunk-item-stats">Rows: ${c.sourceRows.join('-')} | Tokens: ${c.tokens}</div>
+              <div class="chunk-item-preview">${c.preview}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="data-card" id="chunkDetailPanel" style="display:none; border-color:var(--accent-glow); background:rgba(0,0,0,0.3);">
+          <div style="font-weight:700; color:var(--accent-2); font-size:12px; margin-bottom:6px;" id="detChunkId"></div>
+          <div style="font-family:var(--mono); font-size:11.5px; white-space:pre-wrap; max-height:150px; overflow-y:auto; color:var(--text);" id="detChunkContent"></div>
+        </div>
+      `);
+      
+      // Inject global function for click
+      window.displayChunkDetail = (idx) => {
+        const chunk = chunks[idx];
+        const panel = $('chunkDetailPanel');
+        const detId = $('detChunkId');
+        const detContent = $('detChunkContent');
+        
+        detId.textContent = `${chunk.chunkId} Full Content:`;
+        detContent.textContent = chunk.preview; // SSE truncates preview or we display content
+        panel.style.display = 'block';
+      };
+    }
+
+    // Query trigger
+    async function startRAGQuery(query) {
+      if (State.queryRunning) return;
+      if (!State.hasIngested) {
+        showToast('Please ingest a data file first.', 'warning');
+        return;
+      }
+      
+      State.queryRunning = true;
+      const sendBtn = $('chatSendBtn');
+      const input = $('chatInput');
+      
+      sendBtn.disabled = true;
+      input.disabled = true;
+      input.value = '';
+      
+      // Append user message
+      appendMessage('user', query);
+      // Append streaming assistant container
+      const responseCard = appendMessage('assistant', '');
+      const responseContent = responseCard.querySelector('.content');
+      responseContent.classList.add('streaming-cursor');
+      
+      buildStepInterface('retrieval');
+      
+      try {
+        setStepStatus('q-embed', 'processing', 'Embedding query string...');
+        addSkeletons('q-embed');
+        
+        const res = await fetch(`${API_BASE}/chat/stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            model: State.settings.groqModel,
+            topK: 8,
+            topN: 3
+          })
+        });
+        
+        if (!res.ok) throw new Error('Failed to query RAG stream backend.');
+
+        let fullText = '';
+        
+        await consumeSSE(res, (ev) => {
+          // Check if this is step telemetry
+          if (ev.event === 'step') {
+            const stepIdMap = {
+              1: 'q-embed',
+              2: 'v-search',
+              3: 'rerank',
+              4: 'context',
+              5: 'generate'
+            };
+            const mappedId = stepIdMap[ev.step];
+            
+            if (ev.status === 'running') {
+              setStepStatus(mappedId, 'processing', `${ev.label}...`);
+              addSkeletons(mappedId);
+            } else if (ev.status === 'done') {
+              setStepStatus(mappedId, 'completed', `Completed: ${ev.label}`);
+              
+              if (ev.step === 1) {
+                // Embedding trace
+                setStepBody('q-embed', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Embedding Model</span><span class="val">${ev.data.model}</span></div>
+                    <div class="data-row"><span class="lbl">Latency</span><span class="val">${ev.data.latencyMs} ms</span></div>
+                    <div class="data-row"><span class="lbl">Dimensions</span><span class="val">${ev.data.dimensions}</span></div>
+                  </div>
+                  <div class="vector-visualizer">
+                    <div style="font-size:12px; font-weight:700; margin-bottom:6px; color:#fff;">Query Vector Magnitude Visual (Sample):</div>
+                    <div class="vector-bar-grid" id="qMagGrid"></div>
+                  </div>
+                `);
+                const qGrid = $('qMagGrid');
+                for (let i = 0; i < 64; i++) {
+                  const bar = document.createElement('div');
+                  bar.className = 'vector-bar-col';
+                  bar.style.height = `${Math.floor(Math.random() * 85) + 10}%`;
+                  qGrid.appendChild(bar);
+                }
+              } else if (ev.step === 2) {
+                // Vector similarity search
+                setStepBody('v-search', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Search Limit (K)</span><span class="val">${ev.data.topK}</span></div>
+                    <div class="data-row"><span class="lbl">Matches Found</span><span class="val">${ev.data.count}</span></div>
+                    <div class="data-row"><span class="lbl">Vector Search Latency</span><span class="val">${ev.data.latencyMs} ms</span></div>
+                  </div>
+                  <div style="font-size:12px; font-weight:700; margin-top:14px; color:#fff;">Top Matches:</div>
+                  <div class="table-container">
+                    <table>
+                      <thead>
+                        <tr><th>Rank</th><th>Chunk ID</th><th>Similarity Score</th><th>Snippet</th></tr>
+                      </thead>
+                      <tbody>
+                        ${ev.data.results.map(r => `
+                          <tr>
+                            <td>${r.rank}</td>
+                            <td style="color:var(--accent-2); font-weight:700;">${r.chunkId}</td>
+                            <td>${r.score.toFixed(4)}</td>
+                            <td>${r.preview}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                `);
+              } else if (ev.step === 3) {
+                // Cohere rerank visualization matrix (Before/After comparison)
+                setStepStatus('rerank', 'completed', `Completed: Re-ranking with Cohere`);
+                
+                const beforeItems = ev.data.before.slice(0, 4);
+                const afterItems = ev.data.after;
+                
+                setStepBody('rerank', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Re-ranker Model</span><span class="val">Cohere ${ev.data.model}</span></div>
+                    <div class="data-row"><span class="lbl">Latency</span><span class="val">${ev.data.latencyMs} ms</span></div>
+                    <div class="data-row"><span class="lbl">Rerank Top-N Limit</span><span class="val">${ev.data.topN}</span></div>
+                    <div class="data-row"><span class="lbl">Promoted Nodes</span><span class="val">${ev.data.promoted}</span></div>
+                  </div>
+                  
+                  <div class="rerank-container">
+                    <div class="rerank-column">
+                      <div class="rerank-column-title">Vector DB Rank</div>
+                      ${beforeItems.map((m, idx) => `
+                        <div class="rerank-card">
+                          <div class="rerank-card-num">${idx + 1}</div>
+                          <div class="rerank-card-details">
+                            <div class="rerank-card-id">${m.chunkId}</div>
+                            <div class="rerank-card-score">Score: ${m.score}</div>
+                            <div class="rerank-card-preview">${m.preview}</div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                    <div class="rerank-column">
+                      <div class="rerank-column-title">Cohere Optimized Rank</div>
+                      ${afterItems.map((m, idx) => {
+                        const isPromo = m.originalRank > (idx + 1);
+                        const badgeText = isPromo ? `▲ Promoted` : `Original`;
+                        return `
+                          <div class="rerank-card ${isPromo ? 'promoted' : ''}">
+                            <div class="rerank-badge ${isPromo ? 'promo' : 'original'}">${badgeText}</div>
+                            <div class="rerank-card-num">${idx + 1}</div>
+                            <div class="rerank-card-details">
+                              <div class="rerank-card-id">${m.chunkId}</div>
+                              <div class="rerank-card-score">Score: ${m.score}</div>
+                              <div class="rerank-card-preview">${m.preview}</div>
+                            </div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                `);
+              } else if (ev.step === 4) {
+                // Context assembly details
+                setStepBody('context', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Context Chunks</span><span class="val">${ev.data.chunksIncluded}</span></div>
+                    <div class="data-row"><span class="lbl">Assembled Tokens</span><span class="val">${ev.data.contextTokens} tokens</span></div>
+                  </div>
+                  <div style="font-size:12px; font-weight:700; margin-top:12px; color:#fff;">Assembled System Prompt:</div>
+                  <div style="background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; margin-top:6px; font-family:var(--mono); font-size:11.5px; overflow-y:auto; max-height:100px;">You are a Senior QA Engineer assistant. Use ONLY the context below to answer...</div>
+                `);
+              } else if (ev.step === 5) {
+                // LLM details
+                setStepBody('generate', `
+                  <div class="data-card">
+                    <div class="data-row"><span class="lbl">Generation Model</span><span class="val">${ev.data.model}</span></div>
+                    <div class="data-row"><span class="lbl">Temperature</span><span class="val">${ev.data.temperature}</span></div>
+                    <div class="data-row"><span class="lbl">Max Tokens</span><span class="val">${ev.data.maxTokens}</span></div>
+                  </div>
+                `);
+              }
+            }
+          } else if (ev.type === 'token') {
+            // LLM Generation Token Stream
+            fullText += ev.content;
+            responseContent.textContent = fullText;
+            
+            // Auto scroll chat
+            const history = $('chatHistory');
+            history.scrollTop = history.scrollHeight;
+          } else if (ev.type === 'done') {
+            // Generation finished
+            responseContent.classList.remove('streaming-cursor');
+            setStepStatus('generate', 'completed', `Completed generation with ${ev.model}`);
+            
+            // Show stats metrics
+            setStepBody('generate', `
+              <div class="data-card">
+                <div class="data-row"><span class="lbl">Engine</span><span class="val">Groq Cloud</span></div>
+                <div class="data-row"><span class="lbl">Model</span><span class="val">${ev.model}</span></div>
+                <div class="data-row"><span class="lbl">Prompt Tokens</span><span class="val">${ev.promptTokens}</span></div>
+                <div class="data-row"><span class="lbl">Completion Tokens</span><span class="val">${ev.completionTokens}</span></div>
+                <div class="data-row"><span class="lbl">Total Tokens</span><span class="val">${ev.totalTokens}</span></div>
+                <div class="data-row"><span class="lbl">Latency</span><span class="val">${ev.latencyMs} ms</span></div>
+                <div class="data-row"><span class="lbl">Generation Speed</span><span class="val">${((ev.completionTokens / (ev.latencyMs / 1000)) || 0).toFixed(1)} tokens/sec</span></div>
+              </div>
+            `);
+            
+            showToast('RAG pipeline analysis completed!', 'success');
+          } else if (ev.event === 'error') {
+            throw new Error(ev.message);
+          }
+        });
+        
+      } catch (err) {
+        console.error(err);
+        responseContent.classList.remove('streaming-cursor');
+        responseContent.innerHTML = `<span style="color:var(--error); font-weight:700;">Error: ${err.message}</span>`;
+        showToast(`RAG Query failed: ${err.message}`, 'error');
+        
+        qsa('.pipeline-step.processing, .pipeline-step.pending').forEach(card => {
+          const sid = card.dataset.stepId;
+          setStepStatus(sid, 'error', 'Failed during generation');
+        });
+      } finally {
+        State.queryRunning = false;
+        sendBtn.disabled = false;
+        input.disabled = false;
+      }
+    }
+
+    function appendMessage(role, content) {
+      const history = $('chatHistory');
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      
+      const headerTitle = role === 'user' ? 'You' : 'QA Assistant';
+      div.innerHTML = `
+        <div class="role"><span>${headerTitle}</span></div>
+        <div class="content">${content}</div>
+      `;
+      history.appendChild(div);
+      history.scrollTop = history.scrollHeight;
+      return div;
+    }
+
+    function enableQuerySection() {
+      $('chatInput').disabled = false;
+      $('chatSendBtn').disabled = false;
+      qsa('.example-query').forEach(q => q.disabled = false);
+    }
+
+    // File handling
+    async function handleLoadedFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+        showToast('Invalid file format. Please upload a CSV or Excel sheet.', 'error');
+        return;
+      }
+      
+      try {
+        let rows = [];
+        if (ext === 'csv') {
+          rows = await new Promise((resolve, reject) => {
+            Papa.parse(file, {
+              header: true,
+              skipEmptyLines: true,
+              complete: (res) => resolve(res.data),
+              error: reject
+            });
+          });
+        } else {
+          const buffer = await file.arrayBuffer();
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+        }
+        
+        State.file = file;
+        State.parsedRows = rows;
+        State.headers = rows.length ? Object.keys(rows[0]) : [];
+        State.rowCount = rows.length;
+        
+        $('fileName').textContent = file.name;
+        $('fileMeta').innerHTML = `
+          <span>${fmtNum(State.rowCount)} records</span>
+          <span>${State.headers.length} columns</span>
+          <span>Format: ${ext.toUpperCase()}</span>
+        `;
+        
+        $('fileInfo').classList.add('show');
+        $('ingestBtn').disabled = false;
+        buildStepInterface('ingestion');
+        
+        showToast(`Loaded ${fmtNum(State.rowCount)} rows from ${file.name}`, 'success');
+      } catch (err) {
+        showToast(`Parsing error: ${err.message}`, 'error');
+        console.error(err);
+      }
+    }
+
+    function initEventListeners() {
+      // Stage switching tabs
+      $('tabIngestBtn').addEventListener('click', () => {
+        $('tabIngestBtn').classList.add('active');
+        $('tabQueryBtn').classList.remove('active');
+        $('stage-ingestion').classList.add('active');
+        $('stage-retrieval').classList.remove('active');
+        State.stage = 'ingestion';
+        buildStepInterface('ingestion');
+      });
+      
+      $('tabQueryBtn').addEventListener('click', () => {
+        $('tabIngestBtn').classList.remove('active');
+        $('tabQueryBtn').classList.add('active');
+        $('stage-ingestion').classList.remove('active');
+        $('stage-retrieval').classList.add('active');
+        State.stage = 'retrieval';
+        buildStepInterface('retrieval');
+      });
+      
+      // Upload controls
+      const zone = $('uploadZone');
+      const input = $('fileInput');
+      
+      zone.addEventListener('click', () => input.click());
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+      zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+          handleLoadedFile(e.dataTransfer.files[0]);
+        }
+      });
+      
+      input.addEventListener('change', () => {
+        if (input.files.length) handleLoadedFile(input.files[0]);
+      });
+      
+      // Configuration parameters update
+      const sizeSlider = $('chunkSize');
+      const sizeVal = $('chunkSizeVal');
+      sizeSlider.addEventListener('input', () => {
+        sizeVal.textContent = sizeSlider.value;
+        State.chunkConfig.size = parseInt(sizeSlider.value);
+      });
+      
+      const overlapSlider = $('chunkOverlap');
+      const overlapVal = $('chunkOverlapVal');
+      overlapSlider.addEventListener('input', () => {
+        overlapVal.textContent = overlapSlider.value;
+        State.chunkConfig.overlap = parseInt(overlapSlider.value);
+      });
+      
+      $('chunkStrategy').addEventListener('change', (e) => {
+        State.chunkConfig.strategy = e.target.value;
+      });
+      
+      $('resetIndexCheck').addEventListener('change', (e) => {
+        State.chunkConfig.reset = e.target.checked;
+      });
+      
+      // Ingest trigger
+      $('ingestBtn').addEventListener('click', startIngestion);
+      
+      // Chat inputs
+      const chatInput = $('chatInput');
+      const sendBtn = $('chatSendBtn');
+      
+      sendBtn.addEventListener('click', () => {
+        const query = chatInput.value.trim();
+        if (query) startRAGQuery(query);
+      });
+      
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendBtn.click();
+        }
+      });
+      
+      // Example queries
+      qsa('.example-query').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (!btn.disabled) startRAGQuery(btn.textContent);
+        });
+      });
+      
+      // Settings modal controls
+      const settingsModal = $('settingsModal');
+      $('settingsBtn').addEventListener('click', () => {
+        $('modalApiKey').value = State.settings.groqKey;
+        $('modalModel').value = State.settings.groqModel;
+        settingsModal.style.display = 'flex';
+      });
+      
+      $('modalClose').addEventListener('click', () => {
+        settingsModal.style.display = 'none';
+      });
+      
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) settingsModal.style.display = 'none';
+      });
+      
+      $('modalSaveBtn').addEventListener('click', () => {
+        const key = $('modalApiKey').value.trim();
+        const model = $('modalModel').value;
+        
+        State.settings.groqKey = key;
+        State.settings.groqModel = model;
+        settingsModal.style.display = 'none';
+        showToast('RAG Configuration Saved!', 'success');
+      });
+    }
+
+    // Startup initializer
+    function run() {
+      initEventListeners();
+      buildStepInterface('ingestion');
+      queryHealth();
+    }
+    
+    document.addEventListener('DOMContentLoaded', run);
+  </script>
+</body>
+</html>

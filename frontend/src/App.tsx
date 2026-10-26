@@ -1664,7 +1664,7 @@ function App() {
                     <Zap size={13} style={{ color: selectedFramework === 'none' ? '#8b949e' : '#38bdf8' }} />
                     <span>
                       {selectedFramework === 'none' 
-                        ? '📋 Test Cases Only' 
+                        ? '📋 Generate Test Cases' 
                         : `${selectedFramework === 'playwright' ? '🎭 Playwright' : '☕ Selenium'} (${selectedLanguage.toUpperCase()})`}
                     </span>
                     <ChevronDown 
@@ -1839,7 +1839,7 @@ function App() {
                         </div>
                       </div>
 
-                      {/* Test Cases Only Category */}
+                      {/* Test Cases Category */}
                       <div className="framework-popover-section">
                         <div className="framework-section-title">📋 QA Specifications</div>
                         <div 
@@ -1850,8 +1850,8 @@ function App() {
                           }}
                         >
                           <div className="framework-opt-info">
-                            <span className="framework-opt-name">Test Cases Only (No Code)</span>
-                            <span className="framework-opt-desc">Generate 10+ manual QA test cases only</span>
+                            <span className="framework-opt-name">Generate Test Cases</span>
+                            <span className="framework-opt-desc">Functional, negative & boundary test cases</span>
                           </div>
                           {selectedFramework === 'none' && <Check size={14} className="framework-check" />}
                         </div>

@@ -53,11 +53,16 @@ export const generateTestCase = async (
   const req = requirement || jiraTicket?.summary || 'User checkout and token authentication verification';
   const tmpl = template || 'Functional & E2E';
 
+  const countMatch = req.match(/(?:(?:generate|give|create|write|provide|make|keep|show|output)\s+(?:me\s+)?)?(\d+)\s*(?:\+)?\s*(?:test\s*cases?|testcases?|tests?|scenarios?|cases?)/i) ||
+                     req.match(/(?:test\s*cases?|testcases?|scenarios?)\s*[:=]?\s*(\d+)/i) ||
+                     req.match(/(\d+)\s*(?:test\s*cases?|testcases?)/i);
+  const parsedCount = countMatch && countMatch[1] ? parseInt(countMatch[1], 10) : null;
+  const targetCount = (parsedCount && parsedCount > 0 && parsedCount <= 50) ? parsedCount : 12;
+
   const isAmazon = req.toLowerCase().includes('amazon');
 
   if (isAmazon) {
-    return {
-      response: [
+    const amazonCases = [
         {
           id: `${prefix}01`,
           title: 'Amazon Login - Verify landing on Sign-In page with valid form controls',
@@ -238,13 +243,73 @@ export const generateTestCase = async (
           test_data: 'Session termination payload',
           expected_result: 'Session completely invalidated; browser Back button displays login screen or cached redirect',
           linked_jira_id: jId || undefined
+        },
+        {
+          id: `${prefix}13`,
+          title: 'Amazon Login - Verify Two-Step Verification (OTP / SMS) authentication prompt',
+          type: 'Security / 2FA',
+          priority: 'P1',
+          preconditions: 'Account has Two-Step Verification enabled',
+          steps: [
+            'Enter valid registered credentials and click Sign-In',
+            'Verify redirect to Two-Step Verification screen',
+            'Enter 6-digit numeric OTP and submit'
+          ],
+          test_data: 'OTP: 123456',
+          expected_result: 'OTP verified successfully; session authorized and redirected to homepage',
+          linked_jira_id: jId || undefined
+        },
+        {
+          id: `${prefix}14`,
+          title: 'Amazon Login - Verify phone number login format with international country code',
+          type: 'Functional / Internationalization',
+          priority: 'P2',
+          preconditions: 'Mobile number registered with country code prefix',
+          steps: [
+            'Enter mobile number formatted with international prefix (e.g. +1 555-0199)',
+            'Click Continue',
+            'Verify seamless transition to password or SMS verification screen'
+          ],
+          test_data: '+15550199000',
+          expected_result: 'Country code parsed correctly without rejecting phone format',
+          linked_jira_id: jId || undefined
+        },
+        {
+          id: `${prefix}15`,
+          title: 'Amazon Login - Verify concurrent sessions across multiple browsers/devices',
+          type: 'Concurrency / Session Management',
+          priority: 'P2',
+          preconditions: 'User logged in on Device A (Chrome)',
+          steps: [
+            'Authenticate using same credentials on Device B (Firefox)',
+            'Perform simultaneous cart update on both devices'
+          ],
+          test_data: 'Device A & B concurrent session',
+          expected_result: 'Both sessions maintain state; cart items synchronized without forced logout or data corruption',
+          linked_jira_id: jId || undefined
+        },
+        {
+          id: `${prefix}16`,
+          title: 'Amazon Login - Verify browser back button from password screen returns to email screen',
+          type: 'UI / Navigation',
+          priority: 'P2',
+          preconditions: 'User entered email and is currently on password screen',
+          steps: [
+            'Click browser Back button from password input view',
+            'Verify user returns to initial email entry screen',
+            'Verify previous email value is retained or cleanly re-editable'
+          ],
+          test_data: 'Browser navigation event',
+          expected_result: 'Returns cleanly to email screen without page crash or session desynchronization',
+          linked_jira_id: jId || undefined
         }
-      ]
+      ];
+    return {
+      response: amazonCases.slice(0, targetCount)
     };
   }
 
-  return {
-    response: [
+  const genericCases = [
       {
         id: `${prefix}01`,
         title: `Verify ${tmpl} - Positive happy path execution with valid payload`,
@@ -416,8 +481,67 @@ export const generateTestCase = async (
         test_data: 'Form draft state payload',
         expected_result: 'Draft state recovered from local storage or clean initial state initialized without UI crashes',
         linked_jira_id: jId || undefined
+      },
+      {
+        id: `${prefix}13`,
+        title: `Verify ${tmpl} - Rate limiting enforcement (HTTP 429 Too Many Requests)`,
+        type: 'Security / Rate Limiting',
+        priority: 'P2',
+        preconditions: 'Endpoint configured with rate limit policy (e.g. 60 req/min)',
+        steps: [
+          'Fire 65 rapid requests within 10 seconds against target endpoint',
+          'Verify status code on 61st request and Retry-After header'
+        ],
+        test_data: 'Burst request payload (65 queries)',
+        expected_result: 'Returns HTTP 429 Too Many Requests with explicit Retry-After cooldown window',
+        linked_jira_id: jId || undefined
+      },
+      {
+        id: `${prefix}14`,
+        title: `Verify ${tmpl} - Cross-Origin Resource Sharing (CORS) header restriction`,
+        type: 'Security / CORS',
+        priority: 'P1',
+        preconditions: 'CORS whitelist configured on API gateway',
+        steps: [
+          'Send OPTIONS preflight request with Origin "https://unauthorized-evil-site.com"',
+          'Verify Access-Control-Allow-Origin response header'
+        ],
+        test_data: 'Origin: https://unauthorized-evil-site.com',
+        expected_result: 'Unauthorized origin rejected; Access-Control-Allow-Origin not granted',
+        linked_jira_id: jId || undefined
+      },
+      {
+        id: `${prefix}15`,
+        title: `Verify ${tmpl} - Unicode and emoji characters payload handling`,
+        type: 'Data Integrity / Internationalization',
+        priority: 'P2',
+        preconditions: 'Database UTF-8mb4 character set enabled',
+        steps: [
+          'Input multi-byte unicode characters and emojis (e.g. "QA Test 🚀⚡✓")',
+          'Submit and inspect persisted value in UI and database'
+        ],
+        test_data: 'Payload: "International QA 🚀 ✓ 測試"',
+        expected_result: 'Data stored and rendered without encoding corruption or garbled characters',
+        linked_jira_id: jId || undefined
+      },
+      {
+        id: `${prefix}16`,
+        title: `Verify ${tmpl} - Graceful degradation and error boundary on unexpected exception`,
+        type: 'Resilience / Error Boundary',
+        priority: 'P2',
+        preconditions: 'Downstream microservice temporarily unresponsive (HTTP 500)',
+        steps: [
+          'Trigger action while downstream service returns 500 Internal Server Error',
+          'Inspect user interface presentation'
+        ],
+        test_data: 'Mock 500 Internal Server Error',
+        expected_result: 'Friendly error banner displayed without white screen of death; application remains interactive',
+        linked_jira_id: jId || undefined
       }
-    ]
+    ];
+
+  return {
+    response: genericCases.slice(0, targetCount)
   };
 };
 

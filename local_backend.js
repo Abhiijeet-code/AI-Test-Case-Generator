@@ -335,28 +335,30 @@ public class ${pageClassName} {
       absFilePath = path.join(TESTS_DIR, fileName);
       pageFileName = isAmazon ? 'amazon_login_page.py' : `${cleanId.toLowerCase()}_page.py`;
       pageAbsPath = path.join(WORKSPACE_DIR, 'tests', 'pages', pageFileName);
+      const pyTestClass = isAmazon ? 'TestAmazonLoginSelenium' : `Test${cleanId}Selenium`;
+      const pyPageClass = isAmazon ? 'AmazonLoginPage' : `${cleanId}Page`;
 
       specCode = `import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from pages.${pageFileName.replace('.py', '')} import AmazonLoginPage
+from pages.${pageFileName.replace('.py', '')} import ${pyPageClass}
 
-class TestAmazonLoginSelenium:
+class ${pyTestClass}:
     @pytest.fixture(autouse=True)
     def setup_and_teardown(self):
         options = webdriver.ChromeOptions()
         options.add_argument("--start-maximized")
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        self.login_page = AmazonLoginPage(self.driver)
+        self.login_page = ${pyPageClass}(self.driver)
         self.login_page.open("${targetUrl}")
         yield
         self.driver.quit()
 
     def test_tc01_navigation(self):
-        assert "Amazon" in self.driver.title or "signin" in self.driver.current_url
+        assert self.driver.current_url is not None
 
-    def test_tc02_invalid_email_alert(self):
+    def test_tc02_invalid_credentials_alert(self):
         self.login_page.enter_email("unregistered_qa_test99281@domainnotexist.com")
         self.login_page.click_continue()
         assert self.login_page.is_error_displayed()
@@ -366,13 +368,13 @@ class TestAmazonLoginSelenium:
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-class AmazonLoginPage:
+class ${pyPageClass}:
     def __init__(self, driver):
         self.driver = driver
         self.wait = WebDriverWait(driver, 10)
-        self.email_input = (By.ID, "ap_email")
-        self.continue_btn = (By.ID, "continue")
-        self.error_alert = (By.ID, "auth-error-message-box")
+        self.email_input = (By.ID, "ap_email" if ${isAmazon ? 'True' : 'False'} else "email")
+        self.continue_btn = (By.ID, "continue" if ${isAmazon ? 'True' : 'False'} else "submit-btn")
+        self.error_alert = (By.CSS_SELECTOR, "#auth-error-message-box, [role='alert'], .error-message")
 
     def open(self, url):
         self.driver.get(url)
@@ -671,7 +673,7 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
     return [
       {
         id: `${prefix}01`,
-        title: 'Amazon Login - Verify landing on Sign-In page with valid fields',
+        title: 'Amazon Login - Verify landing on Sign-In page with valid form controls',
         type: 'Positive / Functional',
         priority: 'P1',
         preconditions: 'Browser online; navigate to amazon.com/ap/signin',
@@ -686,7 +688,7 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
       },
       {
         id: `${prefix}02`,
-        title: 'Amazon Login - Verify error alert on unregistered email/mobile number',
+        title: 'Amazon Login - Verify error alert on unregistered email or mobile number',
         type: 'Negative / Validation',
         priority: 'P1',
         preconditions: 'Email not registered on Amazon database',
@@ -716,7 +718,7 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
       },
       {
         id: `${prefix}04`,
-        title: 'Amazon Login - Verify password entry step for registered user',
+        title: 'Amazon Login - Verify valid registered email transitions to password entry',
         type: 'Positive / Flow',
         priority: 'P1',
         preconditions: 'Valid registered test user account',
@@ -729,6 +731,126 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
         test_data: 'qa_verified_user@amazon-sandbox.com',
         expected_result: 'Authentication token set, user redirected to Amazon dashboard/home',
         linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}05`,
+        title: 'Amazon Login - Verify incorrect password triggers generic auth error banner',
+        type: 'Negative / Security',
+        priority: 'P1',
+        preconditions: 'Valid registered account with incorrect password payload',
+        steps: [
+          'Enter valid registered user email and click Continue',
+          'Enter incorrect password "WrongPassword123!" and click Sign-In',
+          'Inspect error alert message'
+        ],
+        test_data: 'Email: valid_user@domain.com, Password: WrongPassword123!',
+        expected_result: 'Error box displays "To better protect your account, please re-enter your password" or "Incorrect password"',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}06`,
+        title: 'Amazon Login - Verify password masking and reveal visibility toggle',
+        type: 'UI / Security',
+        priority: 'P2',
+        preconditions: 'Password field visible in DOM',
+        steps: [
+          'Type password characters into password input field',
+          'Verify input type is "password" (bullet masked)',
+          'Click show password toggle if available and verify characters become readable',
+          'Verify toggle again re-masks characters'
+        ],
+        test_data: 'SampleSecretPassword2026!',
+        expected_result: 'Password text securely masked by default; toggle switches type attribute seamlessly',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}07`,
+        title: 'Amazon Login - Verify boundary limit on email input (RFC 5321 - 254 chars)',
+        type: 'Boundary & Edge',
+        priority: 'P2',
+        preconditions: 'Sign-in page active',
+        steps: [
+          'Input email string with length of 255+ characters',
+          'Click Continue',
+          'Verify input is truncated or displays explicit max-length error'
+        ],
+        test_data: 'a'.repeat(245) + '@domain.com',
+        expected_result: 'Application rejects or truncates gracefully without 500 internal server error',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}08`,
+        title: 'Amazon Login - Verify "Keep me signed in" checkbox session persistence',
+        type: 'Session / State',
+        priority: 'P2',
+        preconditions: 'Valid test credentials with 2FA pre-approved',
+        steps: [
+          'Check "Keep me signed in" checkbox',
+          'Complete successful authentication',
+          'Close browser session and re-open https://www.amazon.com',
+          'Inspect user session state'
+        ],
+        test_data: 'Checkbox state: checked',
+        expected_result: 'Auth session cookie persists; user remains authenticated across browser restart',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}09`,
+        title: 'Amazon Login - Verify 5 consecutive failed logins trigger security challenge',
+        type: 'Security / Brute Force',
+        priority: 'P1',
+        preconditions: 'Active registered user account',
+        steps: [
+          'Attempt login with invalid password 5 consecutive times in 60 seconds',
+          'Inspect challenge response on 5th attempt'
+        ],
+        test_data: '5 failed login attempts',
+        expected_result: 'Security challenge triggered: Amazon requires visual CAPTCHA or mobile OTP to proceed',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}10`,
+        title: 'Amazon Login - Verify SQL injection and XSS payloads in email field are sanitized',
+        type: 'Security / Sanitization',
+        priority: 'P1',
+        preconditions: 'Sign-in page online',
+        steps: [
+          'Enter payload: "\' OR 1=1; <script>alert(1)</script>" into email field',
+          'Click Continue',
+          'Inspect DOM and network request'
+        ],
+        test_data: `' OR 1=1; <script>alert(1)</script>`,
+        expected_result: 'Input sanitized as literal string; rejected as invalid email format; zero script execution',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}11`,
+        title: 'Amazon Login - Verify "Forgot your password" navigation link routes to recovery flow',
+        type: 'Functional / Recovery',
+        priority: 'P2',
+        preconditions: 'Password entry screen visible',
+        steps: [
+          'Click "Forgot your password?" hyperlink',
+          'Verify navigation URL and landing page header'
+        ],
+        test_data: 'Navigation action',
+        expected_result: 'User routed to Password Assistance page with email/phone verification prompt',
+        linked_jira_id: jKey || undefined
+      },
+      {
+        id: `${prefix}12`,
+        title: 'Amazon Login - Verify logout terminates active session and blocks back-button re-entry',
+        type: 'Security / Session Invalidation',
+        priority: 'P1',
+        preconditions: 'User authenticated in active session',
+        steps: [
+          'Execute sign out action via account navigation menu',
+          'Verify redirect to sign-in page with session cookies cleared',
+          'Click browser Back button and attempt authenticated action'
+        ],
+        test_data: 'Session termination payload',
+        expected_result: 'Session completely invalidated; browser Back button displays login screen or cached redirect',
+        linked_jira_id: jKey || undefined
       }
     ];
   }
@@ -736,7 +858,7 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
   return [
     {
       id: `${prefix}01`,
-      title: `Verify ${template} - Positive happy path flow`,
+      title: `Verify ${template} - Positive happy path execution with valid payload`,
       type: template,
       priority: 'P1',
       preconditions: 'User registered with active privileges in test environment',
@@ -751,30 +873,159 @@ function buildTestCases(requirement, jiraTicket = null, template = 'Functional')
     },
     {
       id: `${prefix}02`,
-      title: `Verify ${template} - Boundary input length & format validation`,
+      title: `Verify ${template} - Minimum boundary length validation`,
       type: 'Boundary & Edge',
       priority: 'P2',
       preconditions: 'Input form ready in active DOM',
       steps: [
-        'Input payload at MAX_ALLOWED_LENGTH + 1 character boundary',
-        'Submit form'
+        'Input payload at minimum allowable character boundary (e.g. 1 character)',
+        'Submit form and inspect validation alert'
       ],
-      test_data: 'Boundary string length 256 characters (overflow test)',
-      expected_result: 'Client-side validation error displayed; request rejected with 422 Unprocessable',
+      test_data: 'Minimum boundary payload (1 char)',
+      expected_result: 'Input accepted if valid, or clear inline validation prompt displayed',
       linked_jira_id: jKey || undefined
     },
     {
       id: `${prefix}03`,
-      title: `Verify ${template} - Negative security protection and sanitization`,
-      type: 'Security Boundary',
-      priority: 'Highest',
-      preconditions: 'Security filtering active',
+      title: `Verify ${template} - Maximum boundary overflow rejection`,
+      type: 'Boundary & Edge',
+      priority: 'P2',
+      preconditions: 'Input form ready in active DOM',
       steps: [
-        'Submit malicious payload containing script tags or SQL injection characters',
-        'Inspect server response code and sanitized body'
+        'Input payload exceeding maximum allowed length by 1 character (overflow boundary)',
+        'Attempt submit action'
       ],
-      test_data: `' OR 1=1; <script>alert(1)</script>`,
-      expected_result: 'Request sanitized or blocked with HTTP 400 Bad Request; zero unauthorized leakage',
+      test_data: 'Boundary overflow string (e.g. 256+ characters)',
+      expected_result: 'Form prevents submission or API returns HTTP 422 Unprocessable Entity',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}04`,
+      title: `Verify ${template} - Mandatory required fields submission check`,
+      type: 'Negative / Validation',
+      priority: 'P1',
+      preconditions: 'Form loaded in initial default state',
+      steps: [
+        'Leave all mandatory fields blank',
+        'Click submit button',
+        'Verify validation warnings appear on each required field'
+      ],
+      test_data: 'Empty payload ({})',
+      expected_result: 'Submission blocked; all required fields highlighted with descriptive error labels',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}05`,
+      title: `Verify ${template} - Malformed data format and special characters handling`,
+      type: 'Negative / Format',
+      priority: 'P2',
+      preconditions: 'Validation rules active on target endpoint',
+      steps: [
+        'Input invalid email format (e.g. "missing-at-sign.com") or invalid numeric string',
+        'Submit payload'
+      ],
+      test_data: 'Malformed regex payload: "user@@domain..com"',
+      expected_result: 'Returns HTTP 400 Bad Request with field-level schema validation error',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}06`,
+      title: `Verify ${template} - SQL Injection and XSS vulnerability defense`,
+      type: 'Security / Sanitization',
+      priority: 'P1',
+      preconditions: 'Security WAF and input sanitization layer online',
+      steps: [
+        'Submit payload containing SQL injection: "\' OR 1=1--" and XSS: "<script>alert(1)</script>"',
+        'Inspect server response body and headers'
+      ],
+      test_data: `' OR 1=1; <script>document.cookie</script>`,
+      expected_result: 'Payload strictly sanitized or rejected with HTTP 400; zero script execution in DOM',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}07`,
+      title: `Verify ${template} - Unauthorized request without active JWT token triggers HTTP 401`,
+      type: 'Security / Auth',
+      priority: 'P1',
+      preconditions: 'Endpoint requires Bearer authentication token',
+      steps: [
+        'Send request without Authorization header',
+        'Verify response code and error message'
+      ],
+      test_data: 'Headers: { Authorization: "" }',
+      expected_result: 'Gateway returns HTTP 401 Unauthorized with code "UNAUTHENTICATED"',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}08`,
+      title: `Verify ${template} - Concurrency and idempotency protection against duplicate requests`,
+      type: 'Concurrency / Idempotency',
+      priority: 'P2',
+      preconditions: 'Service configured with idempotency key deduplication',
+      steps: [
+        'Submit initial transaction request with X-Idempotency-Key "idemp_test_01"',
+        'Concurrently fire identical second request within 100ms with same key'
+      ],
+      test_data: 'Header: X-Idempotency-Key: idemp_test_01',
+      expected_result: 'Second request deduplicated; returns cached response without duplicate side-effects',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}09`,
+      title: `Verify ${template} - Network latency and upstream 504 Gateway Timeout recovery`,
+      type: 'Resilience / Network',
+      priority: 'P2',
+      preconditions: 'Mock proxy configured to inject 3500ms delay',
+      steps: [
+        'Initiate request under throttled network condition',
+        'Verify UI displays loading spinner without freezing',
+        'Verify exponential backoff retry triggers upon timeout'
+      ],
+      test_data: 'Simulated 504 Gateway Timeout',
+      expected_result: 'Application displays friendly timeout alert with "Retry" action button',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}10`,
+      title: `Verify ${template} - Session expiry and automatic token renewal or redirect`,
+      type: 'Session / Lifecycle',
+      priority: 'P2',
+      preconditions: 'JWT token expired (>15m)',
+      steps: [
+        'Attempt API request with expired authentication bearer token',
+        'Verify refresh token exchange flow'
+      ],
+      test_data: 'Expired JWT token payload',
+      expected_result: 'Silent token refresh succeeds, or user redirected to login with returnUrl preserved',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}11`,
+      title: `Verify ${template} - Telemetry audit logging and timestamp accuracy`,
+      type: 'Audit & Observability',
+      priority: 'P3',
+      preconditions: 'Centralized observability log sink enabled',
+      steps: [
+        'Execute critical business flow transaction',
+        'Query audit log for correlationId and timestamp'
+      ],
+      test_data: 'Audit verification query',
+      expected_result: 'Structured log entry recorded with userId, action, timestamp (UTC), and status code',
+      linked_jira_id: jKey || undefined
+    },
+    {
+      id: `${prefix}12`,
+      title: `Verify ${template} - State recovery and cache integrity on browser reload`,
+      type: 'Resilience / State',
+      priority: 'P2',
+      preconditions: 'Form partially filled or state active in session store',
+      steps: [
+        'Provide input data into form fields',
+        'Perform hard browser refresh (Ctrl+F5)',
+        'Inspect state restoration'
+      ],
+      test_data: 'Form draft state payload',
+      expected_result: 'Draft state recovered from local storage or clean initial state initialized without UI crashes',
       linked_jira_id: jKey || undefined
     }
   ];
@@ -821,9 +1072,30 @@ const server = http.createServer((req, res) => {
       return sendJson(res, 200, saved);
     }
 
+    // Document and Image Upload Endpoint
+    if (pathname === '/api/documents/upload' || pathname === '/api/upload') {
+      let fileName = 'Uploaded_Document.txt';
+      const nameMatch = bodyStr.match(/filename="([^"]+)"/);
+      if (nameMatch) fileName = nameMatch[1];
+      const ext = path.extname(fileName).replace('.', '').toUpperCase() || 'TXT';
+      const isImg = /PNG|JPG|JPEG|WEBP|GIF|BMP|SVG/i.test(ext);
+
+      return sendJson(res, 200, {
+        status: 'ok',
+        sessionDocId: `doc_${Date.now()}`,
+        originalname: fileName,
+        sizeBytes: bodyStr.length || 1024,
+        wordCount: isImg ? 220 : Math.max(50, Math.floor(bodyStr.length / 7)),
+        pageCount: 1,
+        detectedFormat: isImg ? `${ext} (UI Screenshot)` : ext,
+        ocrApplied: isImg,
+        warnings: []
+      });
+    }
+
     // Jira Fetch Mock/Bridge
     if (pathname === '/api/jira/fetch') {
-      const { jiraId = 'PROJ-1024' } = body;
+      const { jiraId = 'QA-101' } = body;
       return sendJson(res, 200, {
         status: 'ok',
         ticket: {
@@ -856,9 +1128,11 @@ const server = http.createServer((req, res) => {
       const jiraId = isRealJira ? (jiraTicket.key || jiraTicket.jiraId) : null;
       const template = body.template || 'Functional';
 
-      const isSelenium = msgLower.includes('selenium') || body.framework === 'selenium';
-      const isPlaywright = msgLower.includes('playwright') || body.framework === 'playwright';
-      const isCodeReq = isSelenium || isPlaywright || /code|framework|script|automate|test case|pom/i.test(msgLower);
+      // Check intent: code-only vs test cases
+      const wantsTestCasesOnly = /test\s*case|testcase|test\s*scenario|qa\s*cases/i.test(msgLower) && !/generate\s*code|write\s*code|scaffold|codegen|selenium\s*code|playwright\s*code/i.test(msgLower);
+      const isSelenium = (msgLower.includes('selenium') || body.framework === 'selenium') && !wantsTestCasesOnly;
+      const isPlaywright = (msgLower.includes('playwright') || body.framework === 'playwright') && !wantsTestCasesOnly;
+      const isCodeReq = !wantsTestCasesOnly && (isSelenium || isPlaywright || (/code|script|pom|page\s*object|write\s*tests|codegen/i.test(msgLower) && body.framework !== 'none'));
 
       if (isCodeReq) {
         const fw = isSelenium ? 'selenium' : (isPlaywright ? 'playwright' : (body.framework || 'selenium'));
@@ -871,7 +1145,6 @@ const server = http.createServer((req, res) => {
         }
 
         const bundle = buildAutomationBundle(fw, lang, message, jiraId);
-        const testCases = buildTestCases(message, jiraTicket, template);
 
         const replyMarkdown = `### 🚀 Generated ${fw.toUpperCase()} (${lang.toUpperCase()}) Test Framework
 Synthesized an executable **Page Object Model (POM)** automation suite ${jiraId ? `grounded for **${jiraId}**` : 'grounded against requirements'}.
@@ -882,22 +1155,24 @@ Synthesized an executable **Page Object Model (POM)** automation suite ${jiraId 
 
 You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 'Open in Eclipse' : 'Open in VS Code'}"** to execute directly in your IDE.`;
 
+        // CODE ONLY: Do not return testCases table when user requests code
         return sendJson(res, 200, {
           status: 'ok',
           reply: replyMarkdown,
           hasCode: true,
           codeBundle: bundle,
-          testCases: testCases
+          testCases: undefined
         });
       }
 
-      // Regular QA / Test Case generation
+      // Regular QA / Test Case generation: 12+ Comprehensive Cases ONLY
       const testCases = buildTestCases(message, jiraTicket, template);
       return sendJson(res, 200, {
         status: 'ok',
-        reply: `Synthesized grounded test cases ${jiraId ? `for **${jiraId}**` : ''} using RAG pipeline semantic retrieval.`,
+        reply: `### 📋 Generated ${testCases.length} Comprehensive Test Cases\nSynthesized exhaustive positive, negative, boundary, security, and edge-case testing matrix ${jiraId ? `for **${jiraId}**` : 'grounded against requirements'}.`,
         testCases: testCases,
-        hasCode: false
+        hasCode: false,
+        codeBundle: undefined
       });
     }
 

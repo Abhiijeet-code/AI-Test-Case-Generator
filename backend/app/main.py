@@ -646,8 +646,9 @@ def simulate_rag_pipeline(req: RagSimulateRequest):
 
 # ─── Automated Test Framework & Code Generator (Selenium & Playwright) ───
 
-def _generate_automation_framework(framework: str, language: str, requirement: str, jira_id: str):
-    clean_id = (jira_id or "PROJ-1024").replace(" ", "_")
+def _generate_automation_framework(framework: str, language: str, requirement: str, jira_id: Optional[str] = None):
+    is_amazon = "amazon" in (requirement or "").lower()
+    clean_id = (jira_id or ("AmazonLogin" if is_amazon else "AppSuite")).replace(" ", "_")
     slug = "".join(c if c.isalnum() else "_" for c in clean_id).lower()
     req_summary = requirement[:80].replace("'", "\\'") if requirement else "Core Application Test"
 
@@ -1169,7 +1170,7 @@ def generate_framework_endpoint(req: CodegenFrameworkRequest):
         framework=req.framework.lower(),
         language=req.language.lower(),
         requirement=req.requirement,
-        jira_id=req.jiraId or "PROJ-1024"
+        jira_id=req.jiraId
     )
 
 # ─── Interactive Chatbot Endpoint (Connected to RAG & Tester Tools) ───
@@ -1177,7 +1178,7 @@ def generate_framework_endpoint(req: CodegenFrameworkRequest):
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
     msg_lower = req.message.lower()
-    jira_id = req.jiraTicket.jiraId if req.jiraTicket else "PROJ-1024"
+    jira_id = req.jiraTicket.jiraId if req.jiraTicket else None
     
     # ── 1. RAG Context Lookup from FAISS store ──
     rag_context = ""
@@ -1199,10 +1200,11 @@ async def chat_endpoint(req: ChatRequest):
         lang = "python" if "python" in msg_lower or "pytest" in msg_lower else ("java" if "java" in msg_lower else "typescript")
         
         bundle = _generate_automation_framework(framework, lang, req.message, jira_id)
+        target_label = f" for `{jira_id}`" if jira_id else ""
         
         reply_md = f"""### 🚀 Generated {framework.capitalize()} ({lang.capitalize()}) Test Framework
 
-Here is the complete executable automation framework with **Page Object Model** for `{jira_id}`.
+Here is the complete executable automation framework with **Page Object Model**{target_label}.
 
 #### 1. Test Spec: `{bundle['fileName']}`
 ```{lang if lang != 'typescript' else 'ts'}
@@ -1246,10 +1248,12 @@ Here is the complete executable automation framework with **Page Object Model** 
         }
     except Exception:
         # Fallback graceful response
+        label = f" for `{jira_id}`" if jira_id else ""
         return {
             "status": "ok",
-            "reply": f"Understood requirement for `{jira_id}`: {req.message}. Use the toolbar to generate Playwright, Selenium, or BDD test suites.",
+            "reply": f"Understood requirement{label}: {req.message}. Use the toolbar to generate Playwright, Selenium, or BDD test suites.",
             "hasCode": False
         }
+
 
 

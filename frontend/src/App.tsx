@@ -22,7 +22,9 @@ import {
   Terminal,
   FileCode,
   PanelLeft,
-  Coffee
+  Coffee,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Sidebar from './components/Sidebar';
@@ -53,6 +55,56 @@ const TEMPLATES: TestTemplate[] = [
 
 // Jira ID pattern: PROJECT-123
 const JIRA_ID_REGEX = /^[A-Z][A-Z0-9]+-\d+$/;
+
+const SAMPLE_SCENARIOS: Array<{
+  title: string;
+  desc: string;
+  prompt: string;
+  framework: 'playwright' | 'selenium' | 'none';
+  language: string;
+  template: TestTemplate;
+}> = [
+  {
+    title: 'Amazon Sign-In Flow',
+    desc: 'Selenium Python POM for email, OTP & password boundary checks',
+    prompt: 'Amazon Sign-In: Verify email validation, 2FA OTP prompt, and password boundary conditions',
+    framework: 'selenium',
+    language: 'python',
+    template: 'Boundary & Edge'
+  },
+  {
+    title: 'Stripe Webhook Idempotency',
+    desc: 'Playwright TypeScript test suite for payment deduplication',
+    prompt: 'Stripe Webhook Idempotency: Validate payment_intent.succeeded event deduplication, retry exponential backoff, and duplicate X-Idempotency-Key headers',
+    framework: 'playwright',
+    language: 'typescript',
+    template: 'Functional & E2E'
+  },
+  {
+    title: 'Healthcare Patient Portal Auth',
+    desc: 'Security & BDD HIPAA audit trail and session timeout flow',
+    prompt: 'Healthcare Patient Portal: Multi-tenant RBAC session timeout, HIPAA audit trail logging, and encrypted JWT token revocation on logout',
+    framework: 'none',
+    language: 'typescript',
+    template: 'Security Boundary Matrix'
+  },
+  {
+    title: 'E-Commerce Cart & Discount',
+    desc: 'Playwright Java Page Object Model for order validation',
+    prompt: 'E-Commerce Checkout: Verify discount coupon validation, inventory reservation race conditions, and order confirmation email event',
+    framework: 'playwright',
+    language: 'java',
+    template: 'Functional & E2E'
+  },
+  {
+    title: 'Banking Balance Transfer API',
+    desc: 'Selenium Java TestNG high-concurrency boundary checks',
+    prompt: 'Core Banking API: High-concurrency peer-to-peer balance transfer boundary checks, overdraft limit enforcement, and rollback on network drop',
+    framework: 'selenium',
+    language: 'java',
+    template: 'Boundary & Edge'
+  }
+];
 
 interface JiraTicket {
   jiraId: string;
@@ -448,7 +500,29 @@ function App() {
     instructions: string[];
   } | null>(null);
 
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isFrameworkDropdownOpen, setIsFrameworkDropdownOpen] = useState(false);
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const frameworkMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setIsAttachMenuOpen(false);
+      }
+      if (frameworkMenuRef.current && !frameworkMenuRef.current.contains(e.target as Node)) {
+        setIsFrameworkDropdownOpen(false);
+      }
+    };
+    if (isAttachMenuOpen || isFrameworkDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isAttachMenuOpen, isFrameworkDropdownOpen]);
+
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
@@ -653,8 +727,18 @@ function App() {
         }
       }
 
-      // Check if user selected Playwright/Selenium or specifically requested automation code
-      const isCodeReq = selectedFramework !== 'none' || /playwright|selenium|cypress|code|framework|script|automate|pom|page object/i.test(trimmed);
+      // Check if user specifically requested test cases or wants code framework
+      const trimmedLower = trimmed.toLowerCase();
+      const wantsTestCasesOnly = /test\s*cases?|testcases?|scenarios?|test\s*suite\s*cases|qa\s*cases/i.test(trimmedLower) && 
+                                !/generate\s*code|write\s*code|automation\s*code|codegen|script|framework\s*code|automate/i.test(trimmedLower);
+      const explicitlyWantsCode = /code|script|automate|automation|page\s*object|pom|spec|playwright|selenium/i.test(trimmedLower);
+
+      let isCodeReq = false;
+      if (selectedFramework === 'none') {
+        isCodeReq = explicitlyWantsCode && !wantsTestCasesOnly;
+      } else {
+        isCodeReq = !wantsTestCasesOnly;
+      }
 
       if (isCodeReq) {
         let targetFw = selectedFramework !== 'none' ? selectedFramework : 'playwright';
@@ -692,7 +776,7 @@ function App() {
             role: 'ai' as const,
             content: chatRes.reply || `### 🚀 Generated ${targetFw.toUpperCase()} (${targetLang.toUpperCase()}) Test Suite\nCreated Page Object Model and executable tests${resolvedJiraId ? ` for ${resolvedJiraId}` : ''}.`,
             codeBundle: finalBundle,
-            testCases: (chatRes.testCases && chatRes.testCases.length > 0) ? chatRes.testCases : undefined
+            testCases: undefined // STRICTLY CODE ONLY: no test cases table when generating code
           }];
           if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));
           return updated;
@@ -713,7 +797,8 @@ function App() {
           const updated = [...prev, { 
             role: 'ai' as const, 
             content: responseText, 
-            testCases: Array.isArray(result.response) ? result.response : undefined 
+            testCases: Array.isArray(result.response) ? result.response : undefined,
+            codeBundle: undefined // STRICTLY TEST CASES ONLY: no code bundle when generating test cases
           }];
           if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));
           return updated;
@@ -739,7 +824,7 @@ function App() {
   const handleLaunchInVsCode = async (bundleOrData?: any) => {
     const fw = bundleOrData?.framework || selectedFramework || 'playwright';
     const lang = bundleOrData?.language || selectedLanguage || 'typescript';
-    const jId = bundleOrData?.jiraId || 'PROJ-1024';
+    const jId = bundleOrData?.jiraId || undefined;
     const title = bundleOrData?.title || bundleOrData?.fileName || 'Regression Test Suite';
 
     try {
@@ -764,16 +849,14 @@ function App() {
   const handleQuickFrameworkGen = async (framework: string, language: string) => {
     setIsLoading(true);
     setLoadingStage(`Scaffolding ${framework.toUpperCase()} (${language.toUpperCase()}) Test Framework...`);
-    setIsFrameworkDropdownOpen(false);
     setSelectedFramework(framework as any);
     setSelectedLanguage(language);
 
     try {
       const promptText = input.trim() || 'Authentication and payment gateway flow';
-      const jId = 'PROJ-1024';
-      let res = await generateFrameworkApi(framework, language, promptText, jId);
+      let res = await generateFrameworkApi(framework, language, promptText, undefined);
       if (!res || !res.specCode) {
-        res = getScaffoldBundle(framework, language, promptText, jId);
+        res = getScaffoldBundle(framework, language, promptText, undefined);
       }
 
       // If playwright, also launch directly in VS Code
@@ -785,11 +868,11 @@ function App() {
 
       const newMsg: Message = {
         role: 'ai',
-        content: `### 🚀 Generated ${framework.toUpperCase()} (${language.toUpperCase()}) Framework\nComplete runnable test suite and Page Object Model for \`${jId}\`.`,
+        content: `### 🚀 Generated ${framework.toUpperCase()} (${language.toUpperCase()}) Framework\nComplete runnable test suite and Page Object Model.`,
         codeBundle: res,
         testCases: [
           {
-            id: `${jId}-AUTO-01`,
+            id: 'TC-AUTO-01',
             title: `Verify ${framework.toUpperCase()} (${language.toUpperCase()}) E2E test execution`,
             type: 'Positive / Functional',
             priority: 'P1',
@@ -797,7 +880,7 @@ function App() {
             steps: ['Open application login page', 'Execute automated user interaction', 'Assert page elements and URL'],
             test_data: 'qa.analyst@company.com / SecurePass2026!',
             expected_result: 'All assertions pass with HTTP 200/302 redirect',
-            linked_jira_id: jId
+            linked_jira_id: ''
           }
         ]
       };
@@ -806,7 +889,7 @@ function App() {
 
       // Populate codeModalData so code modal has valid code
       setCodeModalData({
-        title: `${jId}: ${promptText} (${language.toUpperCase()})`,
+        title: `${promptText} (${language.toUpperCase()})`,
         fileName: res.fileName,
         specCode: res.specCode,
         configCode: res.configCode,
@@ -814,7 +897,7 @@ function App() {
         vscodeUri: res.vscodeUri,
         language: language,
         suiteName: promptText,
-        jiraId: jId
+        jiraId: undefined
       });
     } catch (e) {
       console.error('Could not scaffold framework:', e);
@@ -845,7 +928,7 @@ function App() {
     if (!codeModalData) return;
     const cases = codeModalData.suiteCases || [
       {
-        id: 'PROJ-1024-TC01',
+        id: 'TC-01',
         title: 'Verify multi-tenant authentication token validation & tenant partition isolation',
         type: 'Functional & E2E',
         priority: 'Highest',
@@ -853,11 +936,11 @@ function App() {
         steps: ['POST /auth/v1/token for Tenant T1', 'Retrieve auth JWT bearer', 'Attempt GET /api/v1/tenant-t2/ledger with T1 token'],
         test_data: 'TenantId: T1, TargetTenant: T2',
         expected_result: 'Gateway returns HTTP 403 Forbidden; cross-tenant access strictly blocked.',
-        linked_jira_id: codeModalData.jiraId || 'PROJ-1024'
+        linked_jira_id: codeModalData.jiraId || ''
       }
     ];
     const sName = codeModalData.suiteName || 'GeneratedSuite';
-    const jId = codeModalData.jiraId || 'PROJ-1024';
+    const jId = codeModalData.jiraId || undefined;
 
     try {
       let res = await exportVsCodeApi(cases, sName, jId, newLang, 'playwright').catch(() => null);
@@ -865,7 +948,7 @@ function App() {
         res = getScaffoldBundle('playwright', newLang, sName, jId);
       }
       setCodeModalData({
-        title: `${jId}: ${sName} (${newLang.toUpperCase()})`,
+        title: jId ? `${jId}: ${sName} (${newLang.toUpperCase()})` : `${sName} (${newLang.toUpperCase()})`,
         fileName: res.fileName,
         specCode: res.specCode,
         configCode: res.configCode,
@@ -879,7 +962,7 @@ function App() {
     } catch {
       const bundle = getScaffoldBundle('playwright', newLang, sName, jId);
       setCodeModalData({
-        title: `${jId}: ${sName} (${newLang.toUpperCase()})`,
+        title: jId ? `${jId}: ${sName} (${newLang.toUpperCase()})` : `${sName} (${newLang.toUpperCase()})`,
         fileName: bundle.fileName,
         specCode: bundle.specCode,
         configCode: bundle.configCode,
@@ -899,7 +982,7 @@ function App() {
     const aiMsgs = messages.filter(m => m.role === 'ai');
     let targetCases: TestCase[] = [];
     let suiteName = 'Playwright_Regression_Suite';
-    let jiraId = 'PROJ-1024';
+    let jiraId: string | undefined = undefined;
 
     // If there's an existing codeBundle in messages matching current request without explicit language override
     const msgWithCode = [...aiMsgs].reverse().find(m => m.codeBundle);
@@ -914,7 +997,7 @@ function App() {
         language: msgWithCode.codeBundle.language || lang,
         suiteCases: targetCases,
         suiteName,
-        jiraId
+        jiraId: msgWithCode.codeBundle.jiraId || undefined
       });
       setIsCodeModalOpen(true);
       return;
@@ -923,13 +1006,13 @@ function App() {
     const msgWithCases = aiMsgs.find(m => m.testCases && m.testCases.length > 0);
     if (msgWithCases?.testCases) {
       targetCases = msgWithCases.testCases;
-      jiraId = targetCases[0]?.linked_jira_id || 'PROJ-1024';
+      jiraId = targetCases[0]?.linked_jira_id || undefined;
       suiteName = targetCases[0]?.title || 'GeneratedSuite';
     } else {
-      // Default sample Playwright test case so button always works seamlessly
+      // Default sample test cases so button always works seamlessly
       targetCases = [
         {
-          id: 'PROJ-1024-TC01',
+          id: 'TC-01',
           title: 'Verify multi-tenant authentication token validation & tenant partition isolation',
           type: 'Functional & E2E',
           priority: 'Highest',
@@ -937,10 +1020,10 @@ function App() {
           steps: ['POST /auth/v1/token for Tenant T1', 'Retrieve auth JWT bearer', 'Attempt GET /api/v1/tenant-t2/ledger with T1 token'],
           test_data: 'TenantId: T1, TargetTenant: T2',
           expected_result: 'Gateway returns HTTP 403 Forbidden; cross-tenant access strictly blocked.',
-          linked_jira_id: 'PROJ-1024'
+          linked_jira_id: ''
         },
         {
-          id: 'PROJ-982-TC02',
+          id: 'TC-02',
           title: 'Verify payment webhook idempotency with duplicate X-Idempotency-Key header',
           type: 'Boundary & E2E',
           priority: 'High',
@@ -948,7 +1031,7 @@ function App() {
           steps: ['Send webhook payment_success event with idempotency key "idemp_abc_01"', 'Wait 500ms and re-send identical webhook with same key'],
           test_data: 'X-Idempotency-Key: idemp_abc_01',
           expected_result: 'Second request returns HTTP 200 but triggers zero secondary ledger credits.',
-          linked_jira_id: 'PROJ-982'
+          linked_jira_id: ''
         }
       ];
       suiteName = 'Playwright_Regression_Suite';
@@ -960,7 +1043,7 @@ function App() {
         res = getScaffoldBundle('playwright', lang, suiteName, jiraId);
       }
       setCodeModalData({
-        title: `${jiraId}: ${suiteName} (${lang.toUpperCase()})`,
+        title: jiraId ? `${jiraId}: ${suiteName} (${lang.toUpperCase()})` : `${suiteName} (${lang.toUpperCase()})`,
         fileName: res.fileName || 'test.spec.ts',
         specCode: res.specCode,
         configCode: res.configCode,
@@ -980,7 +1063,7 @@ function App() {
     } catch (e) {
       const bundle = getScaffoldBundle('playwright', lang, suiteName, jiraId);
       setCodeModalData({
-        title: `${jiraId}: ${suiteName} (${lang.toUpperCase()})`,
+        title: jiraId ? `${jiraId}: ${suiteName} (${lang.toUpperCase()})` : `${suiteName} (${lang.toUpperCase()})`,
         fileName: bundle.fileName,
         specCode: bundle.specCode,
         configCode: bundle.configCode,
@@ -1302,7 +1385,7 @@ function App() {
                   <button 
                     className="hero-chip-btn"
                     onClick={() => {
-                      setInput('PROJ-844: Boundary Analysis for high-value transactions & concurrency limits');
+                      setInput('Boundary Analysis for high-value transactions & concurrency limits');
                       setTemplate('Boundary & Edge');
                     }}
                   >
@@ -1311,7 +1394,7 @@ function App() {
                   <button 
                     className="hero-chip-btn"
                     onClick={() => {
-                      setInput('PROJ-982: Playwright E2E Suite for payment gateway webhook deduplication');
+                      setInput('Playwright E2E Suite for payment gateway webhook deduplication');
                       setTemplate('Playwright E2E Suite');
                     }}
                   >
@@ -1320,7 +1403,7 @@ function App() {
                   <button 
                     className="hero-chip-btn"
                     onClick={() => {
-                      setInput('PROJ-1024: BDD Gherkin Matrix for multi-tenant auth flow isolation');
+                      setInput('BDD Gherkin Matrix for multi-tenant auth flow isolation');
                       setTemplate('BDD Gherkin Matrix');
                     }}
                   >
@@ -1523,20 +1606,22 @@ function App() {
             {/* Bottom Action Toolbar */}
             <div className="bottom-action-toolbar">
               <div className="toolbar-left-group">
-                {/* File Upload Hidden Input */}
+                {/* File & Image Upload Hidden Input */}
                 <input
                   type="file"
                   id="doc-upload"
                   style={{ display: 'none' }}
-                  accept=".pdf,.docx,.txt,.md,.csv,.html,.htm,.rtf"
+                  accept=".pdf,.docx,.txt,.md,.csv,.xlsx,.xls,.html,.htm,.rtf,.json,.yaml,.yml,.png,.jpg,.jpeg,.webp,.gif,.bmp"
                   onChange={async (e) => {
                     if (e.target.files && e.target.files[0]) {
+                      const file = e.target.files[0];
+                      const isImg = /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(file.name) || file.type.startsWith('image/');
                       try {
                         setIsLoading(true);
-                        setLoadingStage('Parsing requirement document...');
-                        const res = await uploadDocument(e.target.files[0]);
+                        setLoadingStage(isImg ? 'Analyzing UI Screenshot with OCR...' : 'Parsing requirement document...');
+                        const res = await uploadDocument(file);
                         setDocMeta({
-                          name: res.originalname || e.target.files[0].name,
+                          name: res.originalname || file.name,
                           sizeBytes: res.sizeBytes || e.target.files[0].size,
                           wordCount: res.wordCount || 0,
                           pageCount: res.pageCount,
@@ -1558,16 +1643,6 @@ function App() {
                   }}
                 />
                 
-                {/* Import Spec Button */}
-                <button 
-                  className="toolbar-btn"
-                  onClick={() => document.getElementById('doc-upload')?.click()}
-                  title="Upload PRD, spec, or test schema document"
-                >
-                  <FileUp size={14} />
-                  <span>Import Spec</span>
-                </button>
-
                 {/* Mode Template Dropdown */}
                 <select
                   value={template}
@@ -1578,55 +1653,212 @@ function App() {
                   {TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
 
-                {/* Automation Framework Dropdown */}
-                <select
-                  value={selectedFramework}
-                  onChange={(e) => {
-                    const fw = e.target.value as 'playwright' | 'selenium' | 'none';
-                    setSelectedFramework(fw);
-                    if (fw === 'selenium') setSelectedLanguage('java');
-                    if (fw === 'playwright') setSelectedLanguage('typescript');
-                  }}
-                  className="mode-select-dropdown"
-                  style={{ background: '#161b22', border: '1px solid #30363d', color: '#e6edf3', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 600, outline: 'none' }}
-                  title="Select Automation Framework"
-                >
-                  <option value="playwright">🎭 Playwright</option>
-                  <option value="selenium">☕ Selenium</option>
-                  <option value="none">📋 Test Cases Only (No Code)</option>
-                </select>
-
-                {/* Linked Target Language Dropdown */}
-                {selectedFramework !== 'none' && (
-                  <select
-                    value={selectedLanguage}
-                    onChange={(e) => {
-                      setSelectedLanguage(e.target.value);
-                      if (selectedFramework === 'playwright') setPlaywrightLang(e.target.value);
-                    }}
-                    className="mode-select-dropdown"
-                    style={{ background: '#161b22', border: '1px solid rgba(56, 139, 253, 0.4)', color: '#79c0ff', borderRadius: 6, padding: '6px 10px', fontSize: 12, fontWeight: 600, outline: 'none' }}
-                    title={`Target language for ${selectedFramework.toUpperCase()}`}
+                {/* Interactive Automation Framework Dropdown */}
+                <div className="framework-dropdown-container" ref={frameworkMenuRef}>
+                  <button
+                    type="button"
+                    className={`framework-select-btn ${isFrameworkDropdownOpen ? 'active' : ''}`}
+                    onClick={() => setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen)}
+                    title="Select Automation Framework & Language (Dropdown selection does not trigger until you send input in chat)"
                   >
-                    {selectedFramework === 'playwright' ? (
-                      <>
-                        <option value="typescript">TypeScript (.spec.ts)</option>
-                        <option value="javascript">JavaScript (.spec.js)</option>
-                        <option value="python">Python (pytest)</option>
-                        <option value="java">Java (JUnit 5)</option>
-                        <option value="csharp">C# (.NET / NUnit)</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="java">Java (TestNG)</option>
-                        <option value="python">Python (pytest)</option>
-                        <option value="csharp">C# (NUnit)</option>
-                        <option value="javascript">JavaScript (Mocha)</option>
-                        <option value="ruby">Ruby (RSpec)</option>
-                      </>
-                    )}
-                  </select>
-                )}
+                    <Zap size={13} style={{ color: selectedFramework === 'none' ? '#8b949e' : '#38bdf8' }} />
+                    <span>
+                      {selectedFramework === 'none' 
+                        ? '📋 Test Cases Only' 
+                        : `${selectedFramework === 'playwright' ? '🎭 Playwright' : '☕ Selenium'} (${selectedLanguage.toUpperCase()})`}
+                    </span>
+                    <ChevronDown 
+                      size={12} 
+                      style={{ 
+                        opacity: 0.7, 
+                        transform: isFrameworkDropdownOpen ? 'rotate(180deg)' : 'none', 
+                        transition: 'transform 0.15s ease' 
+                      }} 
+                    />
+                  </button>
+
+                  {/* Interactive Framework Popover Options */}
+                  {isFrameworkDropdownOpen && (
+                    <div className="framework-dropdown-popover">
+                      <div className="framework-popover-header">
+                        <span>Automation Framework</span>
+                        <button 
+                          type="button" 
+                          className="framework-close-btn" 
+                          onClick={() => setIsFrameworkDropdownOpen(false)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Playwright Category */}
+                      <div className="framework-popover-section">
+                        <div className="framework-section-title">🎭 Playwright Test Suite</div>
+                        <div 
+                          className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'typescript' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('playwright');
+                            setSelectedLanguage('typescript');
+                            setPlaywrightLang('typescript');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">TypeScript (.spec.ts)</span>
+                            <span className="framework-opt-desc">Strongly typed Page Objects & fixtures</span>
+                          </div>
+                          {selectedFramework === 'playwright' && selectedLanguage === 'typescript' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'python' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('playwright');
+                            setSelectedLanguage('python');
+                            setPlaywrightLang('python');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">Python (pytest-playwright)</span>
+                            <span className="framework-opt-desc">Synchronous / Async POM fixtures</span>
+                          </div>
+                          {selectedFramework === 'playwright' && selectedLanguage === 'python' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'java' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('playwright');
+                            setSelectedLanguage('java');
+                            setPlaywrightLang('java');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">Java (Playwright Java)</span>
+                            <span className="framework-opt-desc">JUnit 5 assertions & Page classes</span>
+                          </div>
+                          {selectedFramework === 'playwright' && selectedLanguage === 'java' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'javascript' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('playwright');
+                            setSelectedLanguage('javascript');
+                            setPlaywrightLang('javascript');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">JavaScript (.spec.js)</span>
+                            <span className="framework-opt-desc">ES6 modules & clean syntax</span>
+                          </div>
+                          {selectedFramework === 'playwright' && selectedLanguage === 'javascript' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'csharp' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('playwright');
+                            setSelectedLanguage('csharp');
+                            setPlaywrightLang('csharp');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">C# (.NET / NUnit)</span>
+                            <span className="framework-opt-desc">PageTest fixture & async Task tests</span>
+                          </div>
+                          {selectedFramework === 'playwright' && selectedLanguage === 'csharp' && <Check size={14} className="framework-check" />}
+                        </div>
+                      </div>
+
+                      {/* Selenium Category */}
+                      <div className="framework-popover-section">
+                        <div className="framework-section-title">☕ Selenium WebDriver</div>
+                        <div 
+                          className={`framework-option ${selectedFramework === 'selenium' && selectedLanguage === 'java' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('selenium');
+                            setSelectedLanguage('java');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">Java (TestNG / Maven)</span>
+                            <span className="framework-opt-desc">PageFactory, pom.xml & Eclipse ready</span>
+                          </div>
+                          {selectedFramework === 'selenium' && selectedLanguage === 'java' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'selenium' && selectedLanguage === 'python' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('selenium');
+                            setSelectedLanguage('python');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">Python (pytest)</span>
+                            <span className="framework-opt-desc">WebDriverWait, Expected Conditions</span>
+                          </div>
+                          {selectedFramework === 'selenium' && selectedLanguage === 'python' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'selenium' && selectedLanguage === 'csharp' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('selenium');
+                            setSelectedLanguage('csharp');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">C# (.NET / NUnit)</span>
+                            <span className="framework-opt-desc">OpenQA.Selenium driver setup</span>
+                          </div>
+                          {selectedFramework === 'selenium' && selectedLanguage === 'csharp' && <Check size={14} className="framework-check" />}
+                        </div>
+
+                        <div 
+                          className={`framework-option ${selectedFramework === 'selenium' && selectedLanguage === 'javascript' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('selenium');
+                            setSelectedLanguage('javascript');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">JavaScript (Mocha / Chai)</span>
+                            <span className="framework-opt-desc">selenium-webdriver automation</span>
+                          </div>
+                          {selectedFramework === 'selenium' && selectedLanguage === 'javascript' && <Check size={14} className="framework-check" />}
+                        </div>
+                      </div>
+
+                      {/* Test Cases Only Category */}
+                      <div className="framework-popover-section">
+                        <div className="framework-section-title">📋 QA Specifications</div>
+                        <div 
+                          className={`framework-option ${selectedFramework === 'none' ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedFramework('none');
+                            setIsFrameworkDropdownOpen(false);
+                          }}
+                        >
+                          <div className="framework-opt-info">
+                            <span className="framework-opt-name">Test Cases Only (No Code)</span>
+                            <span className="framework-opt-desc">Generate 10+ manual QA test cases only</span>
+                          </div>
+                          {selectedFramework === 'none' && <Check size={14} className="framework-check" />}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* ─── RAG Pipeline Button ─── */}
                 <button 
@@ -1638,71 +1870,6 @@ function App() {
                   <Zap size={14} />
                   <span>RAG Pipeline</span>
                   <ExternalLink size={12} style={{ opacity: 0.7 }} />
-                </button>
-
-                {/* Framework Generator Quick Dropdown */}
-                <div style={{ position: 'relative' }}>
-                  <button 
-                    className="toolbar-btn" 
-                    onClick={() => setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen)}
-                    title="Generate Selenium or Playwright code framework"
-                  >
-                    <span>⚡ Framework</span>
-                    <ChevronDown size={12} />
-                  </button>
-                  {isFrameworkDropdownOpen && (
-                    <div 
-                      style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: 0,
-                        marginBottom: 6,
-                        background: '#161b22',
-                        border: '1px solid var(--border-light)',
-                        borderRadius: 8,
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                        minWidth: 240,
-                        zIndex: 200,
-                        overflow: 'hidden'
-                      }}
-                    >
-                      <div style={{ padding: '8px 12px', fontSize: 10.5, fontWeight: 700, color: '#8b949e', borderBottom: '1px solid #21262d', textTransform: 'uppercase' }}>
-                        Generate Code Framework
-                      </div>
-                      <div onClick={() => { setPlaywrightLang('typescript'); handleQuickFrameworkGen('playwright', 'typescript'); }} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8' }}>
-                        <Zap size={13} /> Playwright (TypeScript POM)
-                      </div>
-                      <div onClick={() => { setPlaywrightLang('javascript'); handleQuickFrameworkGen('playwright', 'javascript'); }} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#fde047' }}>
-                        <Code2 size={13} /> Playwright (JavaScript POM)
-                      </div>
-                      <div onClick={() => { setPlaywrightLang('python'); handleQuickFrameworkGen('playwright', 'python'); }} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#7dd3fc' }}>
-                        <Code2 size={13} /> Playwright (Python Pytest)
-                      </div>
-                      <div onClick={() => { setPlaywrightLang('java'); handleQuickFrameworkGen('playwright', 'java'); }} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#fdba74' }}>
-                        <FileCode size={13} /> Playwright (Java JUnit 5)
-                      </div>
-                      <div onClick={() => { setPlaywrightLang('csharp'); handleQuickFrameworkGen('playwright', 'csharp'); }} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#d8b4fe' }}>
-                        <FileCode size={13} /> Playwright (C# .NET NUnit)
-                      </div>
-                      <div style={{ height: 1, background: '#21262d', margin: '2px 0' }} />
-                      <div onClick={() => handleQuickFrameworkGen('selenium', 'python')} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#86efac' }}>
-                        <FileCode size={13} /> Selenium (Python POM)
-                      </div>
-                      <div onClick={() => handleQuickFrameworkGen('selenium', 'java')} style={{ padding: '8px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#fdba74' }}>
-                        <FileCode size={13} /> Selenium (Java TestNG)
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* More options + button */}
-                <button 
-                  className="toolbar-btn" 
-                  onClick={() => setIsSettingsOpen(true)} 
-                  title="Configuration & MCP Integration"
-                  style={{ padding: '6px 9px' }}
-                >
-                  <Plus size={14} />
                 </button>
               </div>
 
@@ -1785,14 +1952,117 @@ function App() {
               </div>
             </div>
 
-            {/* ─── Input Row (matching screenshot) ─── */}
+            {/* ─── Input Row (ChatGPT / Gemini / Claude Style) ─── */}
             <div className="input-row-container">
+              {/* Attach / Import Context Interactive Plus Button */}
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  id="btn-attach-menu"
+                  className={`input-attach-btn ${isAttachMenuOpen ? 'active' : ''}`}
+                  onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                  title="Attach files / import specifications (PDF, Word, Markdown, OpenAPI, Jira)"
+                >
+                  <Plus size={18} />
+                </button>
+
+                {/* Interactive Attach Popover Menu */}
+                {isAttachMenuOpen && (
+                  <div className="attach-menu-popover" ref={attachMenuRef}>
+                    <div className="attach-menu-header">
+                      <span>Import & Attach Context</span>
+                      <button 
+                        type="button"
+                        className="attach-menu-close" 
+                        onClick={() => setIsAttachMenuOpen(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div 
+                      className="attach-menu-item"
+                      onClick={() => {
+                        setIsAttachMenuOpen(false);
+                        document.getElementById('doc-upload')?.click();
+                      }}
+                      title="Upload PDF, Word (.docx), UI screenshots (PNG, JPG), Markdown, or CSV"
+                    >
+                      <div className="attach-item-icon doc"><FileUp size={16} /></div>
+                      <div className="attach-item-text">
+                        <span className="attach-item-title">Upload Document or Image</span>
+                        <span className="attach-item-desc">PDF, Word, PNG/JPG screenshot, Markdown, CSV</span>
+                      </div>
+                    </div>
+
+                    <div 
+                      className="attach-menu-item"
+                      onClick={() => {
+                        setIsAttachMenuOpen(false);
+                        document.getElementById('doc-upload')?.click();
+                      }}
+                    >
+                      <div className="attach-item-icon api"><FileCode size={16} /></div>
+                      <div className="attach-item-text">
+                        <span className="attach-item-title">OpenAPI / Swagger Spec</span>
+                        <span className="attach-item-desc">Import .json, .yaml API schema</span>
+                      </div>
+                    </div>
+
+                    <div 
+                      className="attach-menu-item"
+                      onClick={() => {
+                        setIsAttachMenuOpen(false);
+                        const ticket = prompt('Enter Jira Ticket ID (e.g. AUTH-204, CHECKOUT-102):');
+                        if (ticket && ticket.trim()) {
+                          setInput(ticket.trim());
+                        }
+                      }}
+                    >
+                      <div className="attach-item-icon jira"><Sparkles size={16} /></div>
+                      <div className="attach-item-text">
+                        <span className="attach-item-title">Fetch Jira Ticket</span>
+                        <span className="attach-item-desc">Enter ticket key to pull acceptance criteria</span>
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const curSample = SAMPLE_SCENARIOS[sampleIndex % SAMPLE_SCENARIOS.length];
+                      return (
+                        <div 
+                          className="attach-menu-item"
+                          onClick={() => {
+                            setIsAttachMenuOpen(false);
+                            setInput(curSample.prompt);
+                            setSelectedFramework(curSample.framework);
+                            setSelectedLanguage(curSample.language);
+                            setTemplate(curSample.template);
+                            setSampleIndex(prev => prev + 1);
+                          }}
+                          title={`Click to load: ${curSample.title} (Changes every click: #${sampleIndex % SAMPLE_SCENARIOS.length + 1}/${SAMPLE_SCENARIOS.length})`}
+                        >
+                          <div className="attach-item-icon sample"><Sparkles size={16} /></div>
+                          <div className="attach-item-text">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span className="attach-item-title">Load Sample: {curSample.title}</span>
+                              <span style={{ fontSize: 9.5, background: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                #{sampleIndex % SAMPLE_SCENARIOS.length + 1} ↻
+                              </span>
+                            </div>
+                            <span className="attach-item-desc">{curSample.desc}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
               
               <input
                 id="main-input"
                 type="text"
                 className="main-text-input"
-                placeholder={docMeta ? 'Optionally add a Jira ID or extra requirement instructions...' : 'jira ticket or describe test requirements (e.g. "Selenium code bana ke do login form ka")...'}
+                placeholder={docMeta ? 'Optionally add a Jira ID or extra requirement instructions...' : 'Describe requirements or enter Jira ID (e.g. "Amazon login automation")...'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
@@ -1972,7 +2242,7 @@ function App() {
                   minHeight: 260
                 }}
               >
-                {codeModalData.specCode || getScaffoldBundle('playwright', codeModalData.language || 'typescript', codeModalData.suiteName || '', codeModalData.jiraId || 'PROJ-1024').specCode}
+                {codeModalData.specCode || getScaffoldBundle('playwright', codeModalData.language || 'typescript', codeModalData.suiteName || '', codeModalData.jiraId).specCode}
               </pre>
 
               <div style={{ fontSize: 12, color: 'var(--text-3)', background: 'var(--bg-2)', padding: '10px 14px', borderRadius: 6, border: '1px solid var(--border)' }}>

@@ -62,13 +62,13 @@ class McpTestRequest(BaseModel):
 class ExportVsCodeRequest(BaseModel):
     testCases: List[Dict[str, Any]]
     title: Optional[str] = "GeneratedTestSuite"
-    jiraId: Optional[str] = "PROJ-1024"
+    jiraId: Optional[str] = None
     language: Optional[str] = "typescript"
     framework: Optional[str] = "playwright"
 
 class RagSimulateRequest(BaseModel):
     query: Optional[str] = "Payment Gateway Webhook Idempotency"
-    jiraId: Optional[str] = "PROJ-982"
+    jiraId: Optional[str] = None
     chunkSize: Optional[int] = 300
     chunkOverlap: Optional[int] = 50
     strategy: Optional[str] = "sliding-window"
@@ -87,5 +87,6 @@ class CodegenFrameworkRequest(BaseModel):
     language: str = "typescript"
     pattern: str = "page-object-model"
     requirement: str
-    jiraId: Optional[str] = "PROJ-1024"
+    jiraId: Optional[str] = None
     config: Optional[ConfigPayload] = None
+

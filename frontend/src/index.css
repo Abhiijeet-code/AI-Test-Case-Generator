@@ -2645,3 +2645,315 @@ button {
   line-height: 1.45;
 }
 
+/* ─── ChatGPT / Gemini Style Interactive Plus Attach Button & Popover ─── */
+.input-attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.input-attach-btn:hover {
+  background: #30363d;
+  color: #58a6ff;
+  border-color: #58a6ff;
+  transform: scale(1.06);
+}
+
+.input-attach-btn.active {
+  background: rgba(56, 139, 253, 0.2);
+  color: #58a6ff;
+  border-color: #58a6ff;
+}
+
+.attach-menu-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  width: 310px;
+  padding: 8px;
+  z-index: 500;
+  animation: attachMenuPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes attachMenuPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.attach-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid #21262d;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.attach-menu-close {
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.attach-menu-close:hover {
+  color: #fff;
+  background: #21262d;
+}
+
+.attach-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #c9d1d9;
+  user-select: none;
+}
+
+.attach-menu-item:hover {
+  background: #21262d;
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.attach-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.attach-item-icon.doc {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.attach-item-icon.api {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.attach-item-icon.jira {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.attach-item-icon.sample {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.attach-item-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.attach-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0f6fc;
+}
+
+.attach-item-desc {
+  font-size: 11px;
+  color: #8b949e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Interactive Framework Dropdown ────────────────────────────── */
+.framework-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.framework-select-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.framework-select-btn:hover {
+  background: #1c2128;
+  border-color: #388bfd;
+  color: #58a6ff;
+}
+
+.framework-select-btn.active {
+  background: #1c2128;
+  border-color: #388bfd;
+  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
+  color: #58a6ff;
+}
+
+.framework-dropdown-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 310px;
+  max-width: 340px;
+  max-height: 440px;
+  overflow-y: auto;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+  z-index: 250;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: fadeInPop 0.15s ease-out;
+}
+
+.framework-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid #21262d;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.framework-close-btn {
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.framework-close-btn:hover {
+  color: #fff;
+  background: #21262d;
+}
+
+.framework-popover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.framework-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #58a6ff;
+  padding: 6px 8px 3px;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.framework-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  color: #c9d1d9;
+  user-select: none;
+}
+
+.framework-option:hover {
+  background: #21262d;
+  color: #f0f6fc;
+}
+
+.framework-option.selected {
+  background: rgba(56, 139, 253, 0.15);
+  border: 1px solid rgba(56, 139, 253, 0.35);
+  color: #79c0ff;
+}
+
+.framework-opt-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.framework-opt-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+
+.framework-opt-desc {
+  font-size: 10.5px;
+  color: #8b949e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.framework-option.selected .framework-opt-desc {
+  color: #93c5fd;
+}
+
+.framework-check {
+  color: #3fb950;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+
+

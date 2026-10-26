@@ -21,3 +21,6 @@ gemini_models*
 settings.json
 .metadata/
 .vscode/
+pom.xml
+src/
+tests/

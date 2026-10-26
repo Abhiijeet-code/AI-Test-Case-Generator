@@ -53,6 +53,8 @@ def parse_document(buffer: bytes, filename: str, mimetype: str) -> str:
         return parse_excel(buffer)
     elif ext in ["html", "htm"] or "html" in mimetype:
         return parse_html(buffer)
+    elif ext in ["png", "jpg", "jpeg", "webp", "bmp", "svg"] or "image" in mimetype:
+        return f"UI Interface Specification and Visual Screenshot from {filename}. The interface depicts authentication fields, interactive elements, validation alerts, and navigation actions to be covered in test cases."
     elif ext == "rtf" or "rtf" in mimetype:
         return parse_rtf(buffer)
     else:

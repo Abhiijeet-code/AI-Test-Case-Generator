@@ -682,9 +682,11 @@ export const exportVsCodeApi = async (
   title?: string, 
   jiraId?: string, 
   language: string = 'typescript', 
-  framework: string = 'playwright'
+  framework: string = 'playwright',
+  filePath?: string,
+  fileName?: string
 ) => {
-  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework });
+  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName });
   return res.data;
 };
 

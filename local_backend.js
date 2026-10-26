@@ -5,15 +5,35 @@ const { exec } = require('node:child_process');
 
 const PORT = 3001;
 const WORKSPACE_DIR = __dirname;
-const TESTS_DIR = path.join(WORKSPACE_DIR, 'tests', 'e2e');
-const ECLIPSE_DIR = path.join(WORKSPACE_DIR, 'src', 'test', 'java', 'com', 'testforge');
-const PAGES_DIR = path.join(WORKSPACE_DIR, 'src', 'main', 'java', 'com', 'testforge', 'pages');
 
-// Ensure directories exist
+// Dedicated Test Code Directory (Separate from main application repository)
+const TEST_CODE_DIR = path.join(WORKSPACE_DIR, 'test_code');
+
+// 1. VS Code test code repository: test_code/vscode
+const VSCODE_ROOT = path.join(TEST_CODE_DIR, 'vscode');
+const TESTS_DIR = path.join(VSCODE_ROOT, 'tests');
+const VSCODE_PAGES_DIR = path.join(VSCODE_ROOT, 'pages');
+
+// 2. Eclipse test code repository: test_code/eclipse
+const ECLIPSE_ROOT = path.join(TEST_CODE_DIR, 'eclipse');
+const ECLIPSE_DIR = path.join(ECLIPSE_ROOT, 'src', 'test', 'java', 'com', 'testforge');
+const PAGES_DIR = path.join(ECLIPSE_ROOT, 'src', 'main', 'java', 'com', 'testforge', 'pages');
+
+// Ensure dedicated directories exist in test_code
 fs.mkdirSync(TESTS_DIR, { recursive: true });
+fs.mkdirSync(VSCODE_PAGES_DIR, { recursive: true });
 fs.mkdirSync(ECLIPSE_DIR, { recursive: true });
 fs.mkdirSync(PAGES_DIR, { recursive: true });
-fs.mkdirSync(path.join(WORKSPACE_DIR, 'tests', 'pages'), { recursive: true });
+fs.mkdirSync(path.join(ECLIPSE_ROOT, 'python', 'pages'), { recursive: true });
+function safeWriteFile(targetPath, content) {
+  if (!targetPath) return;
+  try {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, content, 'utf8');
+  } catch (err) {
+    console.error(`Failed to write file ${targetPath}:`, err);
+  }
+}
 
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
@@ -317,24 +337,24 @@ public class ${pageClassName} {
         `Saved Page Object to: ${pageAbsPath}`,
         '1. Open Eclipse IDE',
         '2. File -> Import... -> Maven -> Existing Maven Projects',
-        `3. Select Root Directory: ${WORKSPACE_DIR}`,
+        `3. Select Root Directory: ${ECLIPSE_ROOT}`,
         `4. Right click ${fileName} -> Run As -> TestNG Test`
       ];
 
       try {
-        fs.writeFileSync(absFilePath, specCode, 'utf8');
-        fs.writeFileSync(pageAbsPath, pageCode, 'utf8');
-        const pomPath = path.join(WORKSPACE_DIR, 'pom.xml');
-        if (!fs.existsSync(pomPath)) fs.writeFileSync(pomPath, configCode, 'utf8');
+        safeWriteFile(absFilePath, specCode);
+        safeWriteFile(pageAbsPath, pageCode);
+        const pomPath = path.join(ECLIPSE_ROOT, 'pom.xml');
+        if (!fs.existsSync(pomPath)) safeWriteFile(pomPath, configCode);
       } catch (e) {
         console.error('File write error:', e);
       }
 
     } else if (lang === 'python') {
       fileName = isAmazon ? 'test_amazon_login_selenium.py' : `test_${cleanId.toLowerCase()}_selenium.py`;
-      absFilePath = path.join(TESTS_DIR, fileName);
+      absFilePath = path.join(ECLIPSE_ROOT, 'python', fileName);
       pageFileName = isAmazon ? 'amazon_login_page.py' : `${cleanId.toLowerCase()}_page.py`;
-      pageAbsPath = path.join(WORKSPACE_DIR, 'tests', 'pages', pageFileName);
+      pageAbsPath = path.join(ECLIPSE_ROOT, 'python', 'pages', pageFileName);
       const pyTestClass = isAmazon ? 'TestAmazonLoginSelenium' : `Test${cleanId}Selenium`;
       const pyPageClass = isAmazon ? 'AmazonLoginPage' : `${cleanId}Page`;
 
@@ -401,9 +421,9 @@ class ${pyPageClass}:
 
     } else if (lang === 'csharp') {
       fileName = isAmazon ? 'AmazonLoginSeleniumTest.cs' : `${cleanId}SeleniumTest.cs`;
-      absFilePath = path.join(TESTS_DIR, fileName);
+      absFilePath = path.join(ECLIPSE_ROOT, 'csharp', fileName);
       pageFileName = isAmazon ? 'AmazonLoginPage.cs' : `${cleanId}Page.cs`;
-      pageAbsPath = path.join(WORKSPACE_DIR, 'tests', 'pages', pageFileName);
+      pageAbsPath = path.join(ECLIPSE_ROOT, 'csharp', pageFileName);
 
       specCode = `using NUnit.Framework;
 using OpenQA.Selenium;
@@ -460,9 +480,9 @@ namespace TestForge.Selenium.Pages
       // Javascript or Ruby Selenium
       const isRuby = lang === 'ruby';
       fileName = isRuby ? 'amazon_login_selenium_spec.rb' : 'amazon_login_selenium.test.js';
-      absFilePath = path.join(TESTS_DIR, fileName);
+      absFilePath = path.join(ECLIPSE_ROOT, fileName);
       pageFileName = isRuby ? 'amazon_login_page.rb' : 'amazon_login_page.js';
-      pageAbsPath = path.join(WORKSPACE_DIR, 'tests', 'pages', pageFileName);
+      pageAbsPath = path.join(ECLIPSE_ROOT, pageFileName);
 
       if (isRuby) {
         specCode = `require 'selenium-webdriver'\nrequire 'rspec'\n\nRSpec.describe 'Amazon Login Suite' do\n  before(:each) do\n    @driver = Selenium::WebDriver.for :chrome\n    @driver.get '${targetUrl}'\n  end\n\n  it 'TC01 loads sign in page' do\n    expect(@driver.title).to include('Amazon')\n  end\n\n  after(:each) do\n    @driver.quit\n  end\nend\n`;
@@ -489,7 +509,7 @@ namespace TestForge.Selenium.Pages
     fileName = `${cleanId}_playwright.${ext}`;
     absFilePath = path.join(TESTS_DIR, fileName);
     pageFileName = isAmazon ? 'AmazonLoginPage.ts' : 'LoginPage.ts';
-    pageAbsPath = path.join(WORKSPACE_DIR, 'tests', 'pages', pageFileName);
+    pageAbsPath = path.join(VSCODE_PAGES_DIR, pageFileName);
 
     if (isAmazon) {
       specCode = `import { test, expect } from '@playwright/test';
@@ -635,8 +655,28 @@ export default defineConfig({
     ];
 
     try {
-      fs.writeFileSync(absFilePath, specCode, 'utf8');
-      fs.writeFileSync(pageAbsPath, pageCode, 'utf8');
+      safeWriteFile(absFilePath, specCode);
+      safeWriteFile(pageAbsPath, pageCode);
+      const pwConfigPath = path.join(VSCODE_ROOT, 'playwright.config.ts');
+      if (!fs.existsSync(pwConfigPath)) {
+        safeWriteFile(pwConfigPath, configCode);
+      }
+      const pkgPath = path.join(VSCODE_ROOT, 'package.json');
+      if (!fs.existsSync(pkgPath)) {
+        const pkgContent = JSON.stringify({
+          name: "test-code-vscode",
+          version: "1.0.0",
+          description: "Automated test suites for VS Code",
+          scripts: {
+            "test": "playwright test",
+            "test:headed": "playwright test --headed"
+          },
+          devDependencies: {
+            "@playwright/test": "^1.44.0"
+          }
+        }, null, 2);
+        safeWriteFile(pkgPath, pkgContent);
+      }
     } catch (e) {
       console.error('File write error:', e);
     }
@@ -1326,31 +1366,40 @@ You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 
 
     // Export & Launch in VS Code
     if (pathname === '/api/export-vscode' || pathname === '/api/launch-vscode') {
-      const { title, jiraId = null, language = 'typescript', framework = 'playwright' } = body;
+      const { title, jiraId = null, language = 'typescript', framework = 'playwright', filePath: incomingFilePath, fileName: incomingFileName } = body;
       const bundle = buildAutomationBundle(framework, language, title || 'Regression Suite', jiraId);
 
-      // Execute code command to open in VS Code reliably on Windows
+      const targetFile = incomingFilePath && fs.existsSync(incomingFilePath) ? incomingFilePath : bundle.filePath;
+      const targetFolder = VSCODE_ROOT;
+
+      // Execute code command to open in VS Code reliably on Windows linking workspace and opening target file
       const fullCodeCmd = path.join(process.env.LOCALAPPDATA || 'C:\\Users\\abhid\\AppData\\Local', 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd');
       const cmdToRun = fs.existsSync(fullCodeCmd)
-        ? `"${fullCodeCmd}" "${bundle.filePath}"`
-        : `cmd.exe /c code "${bundle.filePath}"`;
+        ? `"${fullCodeCmd}" "${targetFolder}" -g "${targetFile}"`
+        : `cmd.exe /c code "${targetFolder}" -g "${targetFile}"`;
 
       exec(cmdToRun, (cliErr) => {
         if (cliErr) {
           console.warn('VS Code CLI primary notice:', cliErr.message);
-          exec(`code "${bundle.filePath}"`);
+          exec(`code "${targetFolder}" -g "${targetFile}"`);
         } else {
-          console.log(`VS Code launched for: ${bundle.filePath}`);
+          console.log(`VS Code launched with workspace: ${targetFolder} and file: ${targetFile}`);
         }
       });
 
       return sendJson(res, 200, {
         status: 'success',
         fileName: bundle.fileName,
-        filePath: bundle.filePath,
-        vscodeUri: bundle.vscodeUri,
+        filePath: targetFile,
+        workspacePath: VSCODE_ROOT,
+        vscodeUri: `vscode://file/${targetFile.replace(/\\/g, '/')}`,
         specCode: bundle.specCode,
-        instructions: bundle.instructions
+        instructions: [
+          `Test files saved to dedicated folder: ${VSCODE_ROOT}`,
+          `Active test file: ${targetFile}`,
+          '1. VS Code opened with workspace folder test_code/vscode linked in the explorer',
+          '2. The generated test script is opened in your active editor'
+        ]
       });
     }
 
@@ -1371,23 +1420,23 @@ You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 
 
       const eclipseExe = candidatePaths.find(p => fs.existsSync(p));
 
-      // 1. Launch Eclipse IDE
+      // 1. Launch Eclipse IDE with -data pointing to ECLIPSE_ROOT
       if (eclipseExe) {
-        exec(`cmd.exe /c start "" "${eclipseExe}" -data "${WORKSPACE_DIR}"`, (err) => {
+        exec(`cmd.exe /c start "" "${eclipseExe}" -data "${ECLIPSE_ROOT}"`, (err) => {
           if (err) console.warn('Eclipse launch notice:', err.message);
           else console.log('Eclipse IDE successfully launched from:', eclipseExe);
         });
       } else {
-        exec('cmd.exe /c start eclipse', (err) => {
+        exec(`cmd.exe /c start eclipse -data "${ECLIPSE_ROOT}"`, (err) => {
           if (err) console.warn('Eclipse start notice:', err.message);
         });
       }
 
-      // 2. Open Windows Explorer with the generated Java test class selected
+      // 2. Open Windows Explorer with the generated Java test class selected inside ECLIPSE_ROOT
       if (fs.existsSync(targetFile)) {
         exec(`explorer.exe /select,"${targetFile}"`);
       } else {
-        exec(`explorer.exe "${WORKSPACE_DIR}"`);
+        exec(`explorer.exe "${ECLIPSE_ROOT}"`);
       }
 
       return sendJson(res, 200, {
@@ -1396,14 +1445,15 @@ You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 
         launched: true,
         fileName: bundle.fileName,
         filePath: targetFile,
-        workspacePath: WORKSPACE_DIR,
+        workspacePath: ECLIPSE_ROOT,
         instructions: [
           `Java Test Case saved to: ${targetFile}`,
           `Page Object saved to: ${bundle.pageAbsPath || path.join(PAGES_DIR, bundle.pageFileName)}`,
-          '1. Eclipse IDE has launched on your computer.',
+          `Eclipse Workspace Root: ${ECLIPSE_ROOT}`,
+          '1. Eclipse IDE has launched on your computer with workspace test_code/eclipse.',
           '2. Windows File Explorer opened with the generated Java test file.',
           '3. In Eclipse: File -> Import... -> Maven -> Existing Maven Projects',
-          `4. Select Root Directory: ${WORKSPACE_DIR}`,
+          `4. Select Root Directory: ${ECLIPSE_ROOT}`,
           `5. Right click on ${bundle.fileName} -> Run As -> TestNG Test`
         ]
       });

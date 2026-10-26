@@ -480,6 +480,7 @@ function App() {
   const [codeModalData, setCodeModalData] = useState<{
     title: string;
     fileName: string;
+    filePath?: string;
     specCode: string;
     configCode?: string;
     instructions: string[];
@@ -829,10 +830,12 @@ function App() {
     const lang = bundleOrData?.language || selectedLanguage || 'typescript';
     const jId = bundleOrData?.jiraId || undefined;
     const title = bundleOrData?.title || bundleOrData?.fileName || 'Regression Test Suite';
+    const filePath = bundleOrData?.filePath;
+    const fileName = bundleOrData?.fileName;
 
     try {
-      // 1. Invoke local backend to open file directly in VS Code desktop app via code.cmd
-      await exportVsCodeApi([], title, jId, lang, fw);
+      // 1. Invoke local backend to open file directly in VS Code desktop app linked to test_code/vscode workspace
+      await exportVsCodeApi([], title, jId, lang, fw, filePath, fileName);
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
     }
@@ -894,6 +897,7 @@ function App() {
       setCodeModalData({
         title: `${promptText} (${language.toUpperCase()})`,
         fileName: res.fileName,
+        filePath: res.filePath,
         specCode: res.specCode,
         configCode: res.configCode,
         instructions: res.instructions,
@@ -953,6 +957,7 @@ function App() {
       setCodeModalData({
         title: jId ? `${jId}: ${sName} (${newLang.toUpperCase()})` : `${sName} (${newLang.toUpperCase()})`,
         fileName: res.fileName,
+        filePath: res.filePath,
         specCode: res.specCode,
         configCode: res.configCode,
         instructions: res.instructions,
@@ -1048,6 +1053,7 @@ function App() {
       setCodeModalData({
         title: jiraId ? `${jiraId}: ${suiteName} (${lang.toUpperCase()})` : `${suiteName} (${lang.toUpperCase()})`,
         fileName: res.fileName || 'test.spec.ts',
+        filePath: res.filePath,
         specCode: res.specCode,
         configCode: res.configCode,
         instructions: res.instructions || [

@@ -684,9 +684,10 @@ export const exportVsCodeApi = async (
   language: string = 'typescript', 
   framework: string = 'playwright',
   filePath?: string,
-  fileName?: string
+  fileName?: string,
+  isFullFramework: boolean = true
 ) => {
-  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName });
+  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework });
   return res.data;
 };
 
@@ -1525,7 +1526,8 @@ export const chatWithAssistant = async (
   template?: string,
   sessionDocId?: string,
   frameworkPreference?: string,
-  languagePreference?: string
+  languagePreference?: string,
+  isFullFramework: boolean = false
 ) => {
   const isCode = frameworkPreference !== 'none' || /playwright|selenium|cypress|code|framework|script|automate|pom|test case/i.test(message);
   const jiraId = jiraTicket?.key || jiraTicket?.jiraId || undefined;
@@ -1547,7 +1549,8 @@ export const chatWithAssistant = async (
       template,
       sessionDocId,
       framework: fw,
-      language: lang
+      language: lang,
+      isFullFramework
     });
     if (res.data) {
       if (res.data.codeBundle && res.data.codeBundle.specCode) {

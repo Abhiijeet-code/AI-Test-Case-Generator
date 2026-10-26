@@ -494,6 +494,8 @@ function App() {
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState<'playwright' | 'selenium' | 'none'>('playwright');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('typescript');
+  const [isFrameworkEnabled, setIsFrameworkEnabled] = useState<boolean>(false);
+  const [showTestCaseOnlyPopup, setShowTestCaseOnlyPopup] = useState<boolean>(false);
   const [eclipseModalData, setEclipseModalData] = useState<{
     status: string;
     fileName: string;
@@ -760,7 +762,10 @@ function App() {
         setSelectedFramework(targetFw);
         setSelectedLanguage(targetLang);
 
-        setLoadingStage(`Synthesizing ${targetFw.toUpperCase()} (${targetLang.toUpperCase()}) framework & Page Object Model...`);
+        setLoadingStage(isFrameworkEnabled 
+          ? `Synthesizing ${targetFw.toUpperCase()} (${targetLang.toUpperCase()}) Full Framework & Page Object Model...`
+          : `Synthesizing ${targetFw.toUpperCase()} (${targetLang.toUpperCase()}) Simple Test Code...`
+        );
         const chatRes = await chatWithAssistant(
           trimmed,
           jiraTicket,
@@ -768,7 +773,8 @@ function App() {
           template,
           useDoc && docMeta ? docMeta.sessionDocId : undefined,
           targetFw,
-          targetLang
+          targetLang,
+          isFrameworkEnabled
         );
 
         const finalBundle = (chatRes.codeBundle && chatRes.codeBundle.specCode)
@@ -835,7 +841,7 @@ function App() {
 
     try {
       // 1. Invoke local backend to open file directly in VS Code desktop app linked to test_code/vscode workspace
-      await exportVsCodeApi([], title, jId, lang, fw, filePath, fileName);
+      await exportVsCodeApi([], title, jId, lang, fw, filePath, fileName, bundleOrData?.isFullFramework ?? isFrameworkEnabled);
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
     }
@@ -1713,24 +1719,26 @@ function App() {
                           <div className="toggle-banner-text">
                             <span className="banner-title">⚡ End-to-End Automation Framework</span>
                             <span className="banner-desc">
-                              {selectedFramework !== 'none' 
-                                ? 'Active: Synthesizes Page Objects & runnable specs' 
-                                : 'Inactive: Generates functional & edge test cases'}
+                              {selectedFramework === 'none' 
+                                ? 'Disabled: Test Case generation active' 
+                                : (isFrameworkEnabled 
+                                    ? 'ON: Synthesizes Page Objects & full framework scaffold' 
+                                    : 'OFF: Generates clean standalone simple test code')}
                             </span>
                           </div>
                           <button
                             type="button"
-                            className={`banner-toggle-switch ${selectedFramework !== 'none' ? 'on' : 'off'}`}
+                            className={`banner-toggle-switch ${selectedFramework === 'none' ? 'disabled' : (isFrameworkEnabled ? 'on' : 'off')}`}
                             onClick={() => {
-                              if (selectedFramework !== 'none') {
-                                setSelectedFramework('none');
-                              } else {
-                                setSelectedFramework('playwright');
-                                if (!selectedLanguage) setSelectedLanguage('typescript');
+                              if (selectedFramework === 'none') {
+                                setShowTestCaseOnlyPopup(true);
+                                setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
+                                return;
                               }
+                              setIsFrameworkEnabled(!isFrameworkEnabled);
                             }}
                           >
-                            {selectedFramework !== 'none' ? 'Deselect' : 'Select'}
+                            {selectedFramework === 'none' ? 'Disabled' : (isFrameworkEnabled ? 'Turn OFF' : 'Turn ON')}
                           </button>
                         </div>
 
@@ -1889,6 +1897,7 @@ function App() {
                           className={`framework-option ${selectedFramework === 'none' ? 'selected' : ''}`}
                           onClick={() => {
                             setSelectedFramework('none');
+                            setIsFrameworkEnabled(false);
                             setIsFrameworkDropdownOpen(false);
                           }}
                         >
@@ -1904,34 +1913,50 @@ function App() {
                 </div>
 
                 {/* Quick Framework Select / Deselect Action Button */}
-                <button
-                  type="button"
-                  className={`framework-toggle-btn ${selectedFramework !== 'none' ? 'active' : ''}`}
-                  onClick={() => {
-                    if (selectedFramework !== 'none') {
-                      setSelectedFramework('none');
-                    } else {
-                      setSelectedFramework('playwright');
-                      if (!selectedLanguage) setSelectedLanguage('typescript');
-                    }
-                  }}
-                  title={selectedFramework !== 'none' 
-                    ? 'Framework Active: End-to-End code generated on input (Click to Deselect and switch to Test Cases)' 
-                    : 'Framework Inactive (Click to Select framework for End-to-End code)'}
-                >
-                  {selectedFramework !== 'none' ? (
-                    <>
-                      <span className="toggle-dot on" />
-                      <span>Framework: ON</span>
-                      <X size={12} className="deselect-x" />
-                    </>
-                  ) : (
-                    <>
-                      <span className="toggle-dot off" />
-                      <span>⚡ Select Framework</span>
-                    </>
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  {showTestCaseOnlyPopup && (
+                    <div className="test-case-only-popup" role="alert">
+                      <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                      <span>Test Case Only</span>
+                    </div>
                   )}
-                </button>
+
+                  <button
+                    type="button"
+                    className={`framework-toggle-btn ${selectedFramework === 'none' ? 'disabled' : (isFrameworkEnabled ? 'active' : '')}`}
+                    onClick={() => {
+                      if (selectedFramework === 'none') {
+                        setShowTestCaseOnlyPopup(true);
+                        setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
+                        return;
+                      }
+                      setIsFrameworkEnabled(!isFrameworkEnabled);
+                    }}
+                    title={selectedFramework === 'none' 
+                      ? 'Test Case Only: Framework is disabled in test case generation mode' 
+                      : (isFrameworkEnabled 
+                          ? 'Framework: ON (Full end-to-end framework generated - Click to switch to Simple Code)' 
+                          : 'Framework: OFF (Simple code generated - Click to enable Full Framework)')}
+                  >
+                    {selectedFramework === 'none' ? (
+                      <>
+                        <span className="toggle-dot off" />
+                        <span>Framework: OFF</span>
+                      </>
+                    ) : isFrameworkEnabled ? (
+                      <>
+                        <span className="toggle-dot on" />
+                        <span>Framework: ON</span>
+                        <X size={12} className="deselect-x" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="toggle-dot off" />
+                        <span>Framework: OFF</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
                 {/* ─── RAG Pipeline Button ─── */}

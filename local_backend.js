@@ -45,7 +45,7 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
-function buildAutomationBundle(framework, language, requirement, jiraId = null) {
+function buildAutomationBundle(framework, language, requirement, jiraId = null, isFullFramework = true) {
   const fw = (framework || 'playwright').toLowerCase();
   const reqLower = (requirement || '').toLowerCase();
   const isAmazon = reqLower.includes('amazon');
@@ -79,10 +79,61 @@ function buildAutomationBundle(framework, language, requirement, jiraId = null) 
       const pageClassName = isAmazon ? 'AmazonLoginPage' : `${cleanId}Page`;
       fileName = `${className}.java`;
       absFilePath = path.join(ECLIPSE_DIR, fileName);
-      pageFileName = `${pageClassName}.java`;
-      pageAbsPath = path.join(PAGES_DIR, pageFileName);
+      pageFileName = isFullFramework ? `${pageClassName}.java` : '';
+      pageAbsPath = isFullFramework ? path.join(PAGES_DIR, pageFileName) : '';
 
-      if (isAmazon) {
+      if (!isFullFramework) {
+        specCode = `package com.testforge;
+
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
+
+/**
+ * Simple Standalone Selenium Java Test
+ * Target: ${targetUrl}
+ * ${jiraId ? 'Linked Jira: ' + jiraId : 'Direct Execution'}
+ */
+public class ${className} {
+    private WebDriver driver;
+
+    @BeforeMethod
+    public void setUp() {
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--remote-allow-origins=*");
+        options.addArguments("--start-maximized");
+        driver = new ChromeDriver(options);
+        driver.get("${targetUrl}");
+    }
+
+    @Test(priority = 1, description = "TC01 - Verify page navigation")
+    public void testPageNavigation() {
+        Assert.assertTrue(driver.getTitle().contains("Amazon") || driver.getCurrentUrl().contains("signin"), 
+                "User should be on Amazon Sign-In page");
+    }
+
+    @Test(priority = 2, description = "TC02 - Verify invalid email warning alert")
+    public void testInvalidEmailWarning() {
+        driver.findElement(By.id("ap_email")).sendKeys("unregistered_qa_test99281@domainnotexist.com");
+        driver.findElement(By.id("continue")).click();
+        Assert.assertTrue(driver.findElement(By.id("auth-error-message-box")).isDisplayed(), 
+                "Amazon error box should be displayed for invalid email");
+    }
+
+    @AfterMethod
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
+        }
+    }
+}
+`;
+      } else if (isAmazon) {
         specCode = `package com.testforge;
 
 import com.testforge.pages.AmazonLoginPage;
@@ -332,20 +383,25 @@ public class ${pageClassName} {
 </project>
 `;
       runCommand = `mvn test -Dtest=${className}`;
-      instructions = [
+      instructions = isFullFramework ? [
         `Saved test class to: ${absFilePath}`,
         `Saved Page Object to: ${pageAbsPath}`,
         '1. Open Eclipse IDE',
         '2. File -> Import... -> Maven -> Existing Maven Projects',
         `3. Select Root Directory: ${ECLIPSE_ROOT}`,
         `4. Right click ${fileName} -> Run As -> TestNG Test`
+      ] : [
+        `Saved standalone test class to: ${absFilePath}`,
+        `Run command: ${runCommand}`
       ];
 
       try {
         safeWriteFile(absFilePath, specCode);
-        safeWriteFile(pageAbsPath, pageCode);
-        const pomPath = path.join(ECLIPSE_ROOT, 'pom.xml');
-        if (!fs.existsSync(pomPath)) safeWriteFile(pomPath, configCode);
+        if (isFullFramework && pageAbsPath && pageCode) {
+          safeWriteFile(pageAbsPath, pageCode);
+          const pomPath = path.join(ECLIPSE_ROOT, 'pom.xml');
+          if (!fs.existsSync(pomPath)) safeWriteFile(pomPath, configCode);
+        }
       } catch (e) {
         console.error('File write error:', e);
       }
@@ -508,10 +564,36 @@ namespace TestForge.Selenium.Pages
     const ext = lang === 'python' ? 'py' : lang === 'java' ? 'java' : lang === 'csharp' ? 'cs' : lang === 'javascript' ? 'spec.js' : 'spec.ts';
     fileName = `${cleanId}_playwright.${ext}`;
     absFilePath = path.join(TESTS_DIR, fileName);
-    pageFileName = isAmazon ? 'AmazonLoginPage.ts' : 'LoginPage.ts';
-    pageAbsPath = path.join(VSCODE_PAGES_DIR, pageFileName);
+    pageFileName = isFullFramework ? (isAmazon ? 'AmazonLoginPage.ts' : 'LoginPage.ts') : '';
+    pageAbsPath = isFullFramework ? path.join(VSCODE_PAGES_DIR, pageFileName) : '';
 
-    if (isAmazon) {
+    if (!isFullFramework) {
+      specCode = `import { test, expect } from '@playwright/test';
+
+/**
+ * Playwright Simple Automation Spec (${lang.toUpperCase()})
+ * Target: ${targetUrl}
+ * ${jiraId ? 'Linked Ticket: ' + jiraId : 'Standard Verification'}
+ */
+test.describe('${cleanId} - Simple Spec Suite', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('${targetUrl}');
+  });
+
+  test('TC01 - Verify Landing and Title', async ({ page }) => {
+    await expect(page).toHaveTitle(/.*${isAmazon ? 'Amazon' : 'Login'}.*/i);
+    await expect(page.locator('${isAmazon ? '#ap_email' : 'input[type="email"], #email'}')).toBeVisible();
+    await expect(page.locator('${isAmazon ? '#continue' : 'button[type="submit"]'}')).toBeVisible();
+  });
+
+  test('TC02 - Unregistered credentials display alert', async ({ page }) => {
+    await page.fill('${isAmazon ? '#ap_email' : 'input[type="email"], #email'}', 'unregistered_qa_test99281@domainnotexist.com');
+    await page.click('${isAmazon ? '#continue' : 'button[type="submit"]'}');
+    await expect(page.locator('${isAmazon ? '#auth-error-message-box' : '.error-alert, .alert-danger'}')).toBeVisible();
+  });
+});
+`;
+    } else if (isAmazon) {
       specCode = `import { test, expect } from '@playwright/test';
 import { AmazonLoginPage } from '../pages/AmazonLoginPage';
 
@@ -648,34 +730,39 @@ export default defineConfig({
 });
 `;
     runCommand = `npx playwright test tests/e2e/${fileName} --headed`;
-    instructions = [
+    instructions = isFullFramework ? [
       `Saved spec file: ${absFilePath}`,
       `Saved page object: ${pageAbsPath}`,
+      `Run via CLI: ${runCommand}`
+    ] : [
+      `Saved standalone spec: ${absFilePath}`,
       `Run via CLI: ${runCommand}`
     ];
 
     try {
       safeWriteFile(absFilePath, specCode);
-      safeWriteFile(pageAbsPath, pageCode);
-      const pwConfigPath = path.join(VSCODE_ROOT, 'playwright.config.ts');
-      if (!fs.existsSync(pwConfigPath)) {
-        safeWriteFile(pwConfigPath, configCode);
-      }
-      const pkgPath = path.join(VSCODE_ROOT, 'package.json');
-      if (!fs.existsSync(pkgPath)) {
-        const pkgContent = JSON.stringify({
-          name: "test-code-vscode",
-          version: "1.0.0",
-          description: "Automated test suites for VS Code",
-          scripts: {
-            "test": "playwright test",
-            "test:headed": "playwright test --headed"
-          },
-          devDependencies: {
-            "@playwright/test": "^1.44.0"
-          }
-        }, null, 2);
-        safeWriteFile(pkgPath, pkgContent);
+      if (isFullFramework && pageAbsPath && pageCode) {
+        safeWriteFile(pageAbsPath, pageCode);
+        const pwConfigPath = path.join(VSCODE_ROOT, 'playwright.config.ts');
+        if (!fs.existsSync(pwConfigPath)) {
+          safeWriteFile(pwConfigPath, configCode);
+        }
+        const pkgPath = path.join(VSCODE_ROOT, 'package.json');
+        if (!fs.existsSync(pkgPath)) {
+          const pkgContent = JSON.stringify({
+            name: "test-code-vscode",
+            version: "1.0.0",
+            description: "Automated test suites for VS Code",
+            scripts: {
+              "test": "playwright test",
+              "test:headed": "playwright test --headed"
+            },
+            devDependencies: {
+              "@playwright/test": "^1.44.0"
+            }
+          }, null, 2);
+          safeWriteFile(pkgPath, pkgContent);
+        }
       }
     } catch (e) {
       console.error('File write error:', e);
@@ -689,6 +776,7 @@ export default defineConfig({
     framework: fw,
     language: language || (fw === 'selenium' ? 'java' : 'typescript'),
     jiraId: jiraId || undefined,
+    isFullFramework,
     fileName,
     filePath: absFilePath,
     pageFileName,
@@ -1320,16 +1408,25 @@ const server = http.createServer((req, res) => {
           lang = 'java';
         }
 
-        const bundle = buildAutomationBundle(fw, lang, message, jiraId);
+        const isFullFramework = body.isFullFramework === true;
+        const bundle = buildAutomationBundle(fw, lang, message, jiraId, isFullFramework);
 
-        const replyMarkdown = `### 🚀 Generated ${fw.toUpperCase()} (${lang.toUpperCase()}) Test Framework
+        const replyMarkdown = isFullFramework
+          ? `### 🚀 Generated ${fw.toUpperCase()} (${lang.toUpperCase()}) Test Framework
 Synthesized an executable **Page Object Model (POM)** automation suite ${jiraId ? `grounded for **${jiraId}**` : 'grounded against requirements'}.
 
 - **Test Spec**: \`${bundle.fileName}\`
 - **Page Object**: \`${bundle.pageFileName}\`
 - **Execution**: \`${bundle.runCommand}\`
 
-You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 'Open in Eclipse' : 'Open in VS Code'}"** to execute directly in your IDE.`;
+You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 'Open in Eclipse' : 'Open in VS Code'}"** to execute directly in your IDE.`
+          : `### ⚡ Generated ${fw.toUpperCase()} (${lang.toUpperCase()}) Simple Code
+Synthesized clean, standalone executable test code ${jiraId ? `grounded for **${jiraId}**` : 'grounded against requirements'} without Page Object boilerplate.
+
+- **Test File**: \`${bundle.fileName}\`
+- **Execution**: \`${bundle.runCommand}\`
+
+You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open in Eclipse' : 'Open in VS Code'}"** to open directly in your IDE.`;
 
         // CODE ONLY: Do not return testCases table when user requests code
         return sendJson(res, 200, {
@@ -1366,8 +1463,8 @@ You can inspect and copy the code tabs below, or click **"${fw === 'selenium' ? 
 
     // Export & Launch in VS Code
     if (pathname === '/api/export-vscode' || pathname === '/api/launch-vscode') {
-      const { title, jiraId = null, language = 'typescript', framework = 'playwright', filePath: incomingFilePath, fileName: incomingFileName } = body;
-      const bundle = buildAutomationBundle(framework, language, title || 'Regression Suite', jiraId);
+      const { title, jiraId = null, language = 'typescript', framework = 'playwright', isFullFramework = true, filePath: incomingFilePath, fileName: incomingFileName } = body;
+      const bundle = buildAutomationBundle(framework, language, title || 'Regression Suite', jiraId, isFullFramework);
 
       const targetFile = incomingFilePath && fs.existsSync(incomingFilePath) ? incomingFilePath : bundle.filePath;
       const targetFolder = VSCODE_ROOT;

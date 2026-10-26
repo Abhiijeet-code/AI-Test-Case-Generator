@@ -2996,6 +2996,59 @@ button {
   color: #ff7b72;
 }
 
+.framework-toggle-btn.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: #21262d;
+  background: #0d1117;
+  color: #6e7681;
+}
+
+.framework-toggle-btn.disabled:hover {
+  background: #0d1117;
+  color: #6e7681;
+  border-color: #21262d;
+}
+
+/* Floating Test Case Only Popover / Tooltip */
+.test-case-only-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1c2128;
+  color: #f0f6fc;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 10px rgba(245, 158, 11, 0.25);
+  z-index: 1000;
+  pointer-events: none;
+  animation: popupFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.test-case-only-popup::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #f59e0b transparent transparent transparent;
+}
+
+@keyframes popupFadeIn {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 .toggle-dot {
   width: 7px;
   height: 7px;
@@ -3087,4 +3140,12 @@ button {
 .banner-toggle-switch.off:hover {
   background: #38bdf8;
   color: #0d1117;
+}
+
+.banner-toggle-switch.disabled {
+  background: #161b22;
+  color: #6e7681;
+  border: 1px solid #21262d;
+  cursor: not-allowed;
+  opacity: 0.5;
 }

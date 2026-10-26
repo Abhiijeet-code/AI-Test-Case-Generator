@@ -91,59 +91,121 @@ async def generate_test_cases(prompt: str, provider: str, config: Dict[str, Any]
             return [res]
 
         elif provider_lower == "gemini":
-            api_key = providers_config.get("gemini", {}).get("apiKey")
-            model_name = providers_config.get("gemini", {}).get("model", "gemini-2.5-flash")
-            if not api_key: raise Exception("Gemini API key missing")
+            if not api_key:
+                raise ValueError("Gemini API key is missing. Please set it in Settings.")
+            model_name = model or "gemini-2.5-flash"
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name, system_instruction=system_prompt)
-            response = await model.generate_content_async(prompt, generation_config=genai.GenerationConfig(response_mime_type="application/json"))
-            return json.loads(response.text)
+            genai_model = genai.GenerativeModel(model_name, system_instruction=system_prompt)
+            response = await genai_model.generate_content_async(
+                prompt,
+                generation_config=genai.GenerationConfig(response_mime_type="application/json")
+            )
+            res = json.loads(response.text)
+            if isinstance(res, dict) and "test_cases" in res:
+                return res["test_cases"]
+            if isinstance(res, dict) and len(res.keys()) == 1:
+                return list(res.values())[0]
+            if isinstance(res, list):
+                return res
+            return [res]
 
-        elif provider_lower == "openrouter":
-            api_key = providers_config.get("openrouter", {}).get("apiKey")
-            model = providers_config.get("openrouter", {}).get("model", "openai/gpt-4o-mini")
-            if not api_key: raise Exception("OpenRouter API key missing")
-            client = openai.AsyncOpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+        elif provider_lower in ("openai", "openrouter"):
+            if not api_key:
+                raise ValueError(f"{provider} API key is missing. Please set it in Settings.")
+            base_url_val = "https://openrouter.ai/api/v1" if provider_lower == "openrouter" else None
+            model_name = model or ("openai/gpt-4o-mini" if provider_lower == "openrouter" else "gpt-4o-mini")
+            client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url_val)
             completion = await client.chat.completions.create(
-                model=model,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                response_format={"type": "json_object"}
             )
-            content = completion.choices[0].message.content
-            content = content.strip()
-            if content.startswith("```json"): content = content[7:]
-            if content.startswith("```"): content = content[3:]
-            if content.endswith("```"): content = content[:-3]
-            return json.loads(content.strip())
-            
-        elif provider_lower == "ollama":
-            base_url = providers_config.get("ollama", {}).get("baseUrl", "http://localhost:11434")
-            model = providers_config.get("ollama", {}).get("model", "llama3")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{base_url.rstrip('/')}/api/chat",
-                    json={
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": prompt}
-                        ],
-                        "stream": False,
-                        "format": "json"
+            content = completion.choices[0].message.content or "{}"
+            res = json.loads(content)
+            if isinstance(res, dict) and "test_cases" in res:
+                return res["test_cases"]
+            if isinstance(res, dict) and len(res.keys()) == 1:
+                return list(res.values())[0]
+            if isinstance(res, list):
+                return res
+            return [res]
+
+        elif provider_lower == "claude":
+            if not api_key:
+                raise ValueError("Claude API key is missing. Please set it in Settings.")
+            model_name = model or "claude-3-5-sonnet-20241022"
+            async with httpx.AsyncClient() as http_client:
+                resp = await http_client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json"
                     },
-                    timeout=120.0
+                    json={
+                        "model": model_name,
+                        "max_tokens": 4096,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": prompt}]
+                    },
+                    timeout=60.0
                 )
                 resp.raise_for_status()
-                content = resp.json()["message"]["content"]
-                return json.loads(content)
+                text = resp.json()["content"][0]["text"]
+                text = text.strip()
+                if text.startswith("```json"): text = text[7:]
+                if text.startswith("```"): text = text[3:]
+                if text.endswith("```"): text = text[:-3]
+                res = json.loads(text.strip())
+                if isinstance(res, dict) and "test_cases" in res:
+                    return res["test_cases"]
+                if isinstance(res, dict) and len(res.keys()) == 1:
+                    return list(res.values())[0]
+                if isinstance(res, list):
+                    return res
+                return [res]
+
+        elif provider_lower in ("ollama", "lmstudio"):
+            url = base_url or ("http://localhost:11434" if provider_lower == "ollama" else "http://localhost:1234/v1")
+            model_name = model or ("llama3" if provider_lower == "ollama" else "local-model")
+            endpoint = f"{url.rstrip('/')}/api/chat" if provider_lower == "ollama" else f"{url.rstrip('/')}/chat/completions"
+            async with httpx.AsyncClient() as http_client:
+                payload = {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+                if provider_lower == "ollama":
+                    payload["stream"] = False
+                    payload["format"] = "json"
+                resp = await http_client.post(endpoint, json=payload, timeout=120.0)
+                resp.raise_for_status()
+                data = resp.json()
+                content = data["message"]["content"] if "message" in data else data["choices"][0]["message"]["content"]
+                content = content.strip()
+                if content.startswith("```json"): content = content[7:]
+                if content.startswith("```"): content = content[3:]
+                if content.endswith("```"): content = content[:-3]
+                res = json.loads(content.strip())
+                if isinstance(res, dict) and "test_cases" in res:
+                    return res["test_cases"]
+                if isinstance(res, dict) and len(res.keys()) == 1:
+                    return list(res.values())[0]
+                if isinstance(res, list):
+                    return res
+                return [res]
 
         else:
             raise Exception(f"Unsupported LLM provider: {provider}")
             
     except Exception as e:
         raise Exception(f"Failed to generate test cases: {str(e)}")
+
 
 async def test_llm_connection(provider: str, config: Dict[str, Any]) -> bool:
     try:

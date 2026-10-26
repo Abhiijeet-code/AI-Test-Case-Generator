@@ -1653,47 +1653,74 @@ function App() {
                   {TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
 
-                {/* Interactive Automation Framework Dropdown */}
-                <div className="framework-dropdown-container" ref={frameworkMenuRef}>
-                  <button
-                    type="button"
-                    className={`framework-select-btn ${isFrameworkDropdownOpen ? 'active' : ''}`}
-                    onClick={() => setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen)}
-                    title="Select Automation Framework & Language (Dropdown selection does not trigger until you send input in chat)"
-                  >
-                    <Zap size={13} style={{ color: selectedFramework === 'none' ? '#8b949e' : '#38bdf8' }} />
-                    <span>
-                      {selectedFramework === 'none' 
-                        ? '📋 Generate Test Cases' 
-                        : `${selectedFramework === 'playwright' ? '🎭 Playwright' : '☕ Selenium'} (${selectedLanguage.toUpperCase()})`}
-                    </span>
-                    <ChevronDown 
-                      size={12} 
-                      style={{ 
-                        opacity: 0.7, 
-                        transform: isFrameworkDropdownOpen ? 'rotate(180deg)' : 'none', 
-                        transition: 'transform 0.15s ease' 
-                      }} 
-                    />
-                  </button>
+                {/* Interactive Automation Framework Dropdown & Toggle Group */}
+                <div className="framework-group-wrapper">
+                  <div className="framework-dropdown-container" ref={frameworkMenuRef}>
+                    <button
+                      type="button"
+                      className={`framework-select-btn ${isFrameworkDropdownOpen ? 'active' : ''} ${selectedFramework !== 'none' ? 'active' : ''}`}
+                      onClick={() => setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen)}
+                      title="Select Target Framework & Language"
+                    >
+                      <Zap size={13} style={{ color: selectedFramework === 'none' ? '#8b949e' : '#38bdf8' }} />
+                      <span>
+                        {selectedFramework === 'none' 
+                          ? '📋 Generate Test Cases' 
+                          : `${selectedFramework === 'playwright' ? '🎭 Playwright' : '☕ Selenium'} (${selectedLanguage.toUpperCase()})`}
+                      </span>
+                      <ChevronDown 
+                        size={12} 
+                        style={{ 
+                          opacity: 0.7, 
+                          transform: isFrameworkDropdownOpen ? 'rotate(180deg)' : 'none', 
+                          transition: 'transform 0.15s ease' 
+                        }} 
+                      />
+                    </button>
 
-                  {/* Interactive Framework Popover Options */}
-                  {isFrameworkDropdownOpen && (
-                    <div className="framework-dropdown-popover">
-                      <div className="framework-popover-header">
-                        <span>Automation Framework</span>
-                        <button 
-                          type="button" 
-                          className="framework-close-btn" 
-                          onClick={() => setIsFrameworkDropdownOpen(false)}
-                        >
-                          ✕
-                        </button>
-                      </div>
+                    {/* Interactive Framework Popover Options */}
+                    {isFrameworkDropdownOpen && (
+                      <div className="framework-dropdown-popover">
+                        <div className="framework-popover-header">
+                          <span>Automation Framework</span>
+                          <button 
+                            type="button" 
+                            className="framework-close-btn" 
+                            onClick={() => setIsFrameworkDropdownOpen(false)}
+                          >
+                            ✕
+                          </button>
+                        </div>
 
-                      {/* Playwright Category */}
-                      <div className="framework-popover-section">
-                        <div className="framework-section-title">🎭 Playwright Test Suite</div>
+                        {/* Interactive Select / Deselect Banner */}
+                        <div className="framework-toggle-banner">
+                          <div className="toggle-banner-text">
+                            <span className="banner-title">⚡ End-to-End Automation Framework</span>
+                            <span className="banner-desc">
+                              {selectedFramework !== 'none' 
+                                ? 'Active: Synthesizes Page Objects & runnable specs' 
+                                : 'Inactive: Generates functional & edge test cases'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className={`banner-toggle-switch ${selectedFramework !== 'none' ? 'on' : 'off'}`}
+                            onClick={() => {
+                              if (selectedFramework !== 'none') {
+                                setSelectedFramework('none');
+                              } else {
+                                setSelectedFramework('playwright');
+                                if (!selectedLanguage) setSelectedLanguage('typescript');
+                              }
+                            }}
+                          >
+                            {selectedFramework !== 'none' ? 'Deselect' : 'Select'}
+                          </button>
+                        </div>
+
+                        {/* Playwright Category */}
+                        <div className="framework-popover-section">
+                          <div className="framework-section-title">🎭 Playwright Test Suite</div>
                         <div 
                           className={`framework-option ${selectedFramework === 'playwright' && selectedLanguage === 'typescript' ? 'selected' : ''}`}
                           onClick={() => {
@@ -1859,6 +1886,37 @@ function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Quick Framework Select / Deselect Action Button */}
+                <button
+                  type="button"
+                  className={`framework-toggle-btn ${selectedFramework !== 'none' ? 'active' : ''}`}
+                  onClick={() => {
+                    if (selectedFramework !== 'none') {
+                      setSelectedFramework('none');
+                    } else {
+                      setSelectedFramework('playwright');
+                      if (!selectedLanguage) setSelectedLanguage('typescript');
+                    }
+                  }}
+                  title={selectedFramework !== 'none' 
+                    ? 'Framework Active: End-to-End code generated on input (Click to Deselect and switch to Test Cases)' 
+                    : 'Framework Inactive (Click to Select framework for End-to-End code)'}
+                >
+                  {selectedFramework !== 'none' ? (
+                    <>
+                      <span className="toggle-dot on" />
+                      <span>Framework: ON</span>
+                      <X size={12} className="deselect-x" />
+                    </>
+                  ) : (
+                    <>
+                      <span className="toggle-dot off" />
+                      <span>⚡ Select Framework</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
                 {/* ─── RAG Pipeline Button ─── */}
                 <button 

@@ -43,9 +43,10 @@ import {
   getSettings
 } from './api';
 
-type TestTemplate = 'Functional & E2E' | 'Boundary & Edge' | 'Playwright E2E Suite' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
+type TestTemplate = 'Functional & E2E' | 'Code Generation Only' | 'Boundary & Edge' | 'Playwright E2E Suite' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
 const TEMPLATES: TestTemplate[] = [
   'Functional & E2E',
+  'Code Generation Only',
   'Boundary & Edge',
   'Playwright E2E Suite',
   'BDD Gherkin Matrix',
@@ -734,7 +735,9 @@ function App() {
       const explicitlyWantsCode = /code|script|automate|automation|page\s*object|pom|spec|playwright|selenium/i.test(trimmedLower);
 
       let isCodeReq = false;
-      if (selectedFramework === 'none') {
+      if (template === 'Code Generation Only') {
+        isCodeReq = true;
+      } else if (selectedFramework === 'none') {
         isCodeReq = explicitlyWantsCode && !wantsTestCasesOnly;
       } else {
         isCodeReq = !wantsTestCasesOnly;
@@ -1646,9 +1649,16 @@ function App() {
                 {/* Mode Template Dropdown */}
                 <select
                   value={template}
-                  onChange={(e) => setTemplate(e.target.value as TestTemplate)}
+                  onChange={(e) => {
+                    const newTmpl = e.target.value as TestTemplate;
+                    setTemplate(newTmpl);
+                    if (newTmpl === 'Code Generation Only' && selectedFramework === 'none') {
+                      setSelectedFramework('playwright');
+                      if (!selectedLanguage) setSelectedLanguage('typescript');
+                    }
+                  }}
                   className="mode-select-dropdown"
-                  title="Select test methodology / suite focus"
+                  title="Select test methodology / code generation focus"
                 >
                   {TEMPLATES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>

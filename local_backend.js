@@ -1262,12 +1262,13 @@ const server = http.createServer((req, res) => {
       const isRealJira = !!(jiraTicket && (jiraTicket.key || jiraTicket.jiraId));
       const jiraId = isRealJira ? (jiraTicket.key || jiraTicket.jiraId) : null;
       const template = body.template || 'Functional';
+      const isTemplateCodeOnly = template === 'Code Generation Only';
 
       // Check intent: code-only vs test cases
-      const wantsTestCasesOnly = /test\s*case|testcase|test\s*scenario|qa\s*cases/i.test(msgLower) && !/generate\s*code|write\s*code|scaffold|codegen|selenium\s*code|playwright\s*code/i.test(msgLower);
+      const wantsTestCasesOnly = !isTemplateCodeOnly && /test\s*case|testcase|test\s*scenario|qa\s*cases/i.test(msgLower) && !/generate\s*code|write\s*code|scaffold|codegen|selenium\s*code|playwright\s*code/i.test(msgLower);
       const isSelenium = (msgLower.includes('selenium') || body.framework === 'selenium') && !wantsTestCasesOnly;
       const isPlaywright = (msgLower.includes('playwright') || body.framework === 'playwright') && !wantsTestCasesOnly;
-      const isCodeReq = !wantsTestCasesOnly && (isSelenium || isPlaywright || (/code|script|pom|page\s*object|write\s*tests|codegen/i.test(msgLower) && body.framework !== 'none'));
+      const isCodeReq = isTemplateCodeOnly || (!wantsTestCasesOnly && (isSelenium || isPlaywright || (/code|script|pom|page\s*object|write\s*tests|codegen/i.test(msgLower) && body.framework !== 'none')));
 
       if (isCodeReq) {
         const fw = isSelenium ? 'selenium' : (isPlaywright ? 'playwright' : (body.framework || 'selenium'));

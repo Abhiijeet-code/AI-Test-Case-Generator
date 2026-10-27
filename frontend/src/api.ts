@@ -1,11 +1,10 @@
 import axios from 'axios';
 
-// In production (Vercel experimentalServices), the backend is served at /_/backend
-// Vercel strips the routePrefix before forwarding, so Express receives /api/... paths
-// Full browser URL: /_/backend/api/...  →  Express sees: /api/...
+// In production (Vercel Services), the backend service handles /api/... routes
+// In local development, the local backend runs at http://localhost:3001/api
 const isProd = import.meta.env.PROD || window.location.hostname !== 'localhost';
 const api = axios.create({
-  baseURL: isProd ? '/_/backend/api' : 'http://localhost:3001/api',
+  baseURL: isProd ? '/api' : 'http://localhost:3001/api',
 });
 
 export const getSettings = async () => {

@@ -684,9 +684,10 @@ export const exportVsCodeApi = async (
   framework: string = 'playwright',
   filePath?: string,
   fileName?: string,
-  isFullFramework: boolean = true
+  isFullFramework: boolean = true,
+  specCode?: string
 ) => {
-  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework });
+  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework, specCode });
   return res.data;
 };
 

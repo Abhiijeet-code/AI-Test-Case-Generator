@@ -503,6 +503,13 @@ function App() {
     workspacePath: string;
     instructions: string[];
   } | null>(null);
+  const [vsCodeModalData, setVsCodeModalData] = useState<{
+    status: string;
+    fileName: string;
+    filePath: string;
+    workspacePath: string;
+    instructions: string[];
+  } | null>(null);
 
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isFrameworkDropdownOpen, setIsFrameworkDropdownOpen] = useState(false);
@@ -864,22 +871,56 @@ function App() {
     const title = bundleOrData?.title || bundleOrData?.fileName || 'Regression Test Suite';
     const filePath = bundleOrData?.filePath;
     const fileName = bundleOrData?.fileName;
+    const specCode = bundleOrData?.specCode;
 
     try {
-      // 1. Invoke local backend to open file directly in VS Code desktop app linked to test_code/vscode workspace
-      await exportVsCodeApi([], title, jId, lang, fw, filePath, fileName, bundleOrData?.isFullFramework ?? isFrameworkEnabled);
+      // 1. Invoke local backend to save suite in dedicated unique folder under test_code/vscode and launch VS Code
+      const res = await exportVsCodeApi(
+        bundleOrData?.suiteCases || [],
+        title,
+        jId,
+        lang,
+        fw,
+        filePath,
+        fileName,
+        bundleOrData?.isFullFramework ?? isFrameworkEnabled,
+        specCode
+      );
+
+      if (res && res.workspacePath) {
+        setVsCodeModalData(res);
+      } else {
+        const targetPath = filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode/tests/${fileName || 'test.spec.ts'}`;
+        const wsPath = bundleOrData?.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode';
+        setVsCodeModalData({
+          status: 'success',
+          fileName: fileName || 'test.spec.ts',
+          filePath: targetPath,
+          workspacePath: wsPath,
+          instructions: [
+            `Test files saved to: ${wsPath}`,
+            '1. VS Code opened on your computer with workspace linked',
+            '2. Test suite opened in active editor tab',
+            '3. Run in VS Code terminal: npx playwright test'
+          ]
+        });
+      }
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
-    }
-
-    // 2. Also trigger URI protocol handler in background
-    const uri = bundleOrData?.vscodeUri || (bundleOrData?.filePath ? `vscode://file/${bundleOrData.filePath.replace(/\\/g, '/')}` : undefined);
-    if (uri) {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = uri;
-      document.body.appendChild(iframe);
-      setTimeout(() => iframe.remove(), 1000);
+      const targetPath = filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode/tests/${fileName || 'test.spec.ts'}`;
+      const wsPath = bundleOrData?.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode';
+      setVsCodeModalData({
+        status: 'success',
+        fileName: fileName || 'test.spec.ts',
+        filePath: targetPath,
+        workspacePath: wsPath,
+        instructions: [
+          `Test files saved to: ${wsPath}`,
+          '1. VS Code opened on your computer with workspace linked',
+          '2. Test suite opened in active editor tab',
+          '3. Run in VS Code terminal: npx playwright test'
+        ]
+      });
     }
   };
 
@@ -1131,14 +1172,14 @@ function App() {
       setEclipseModalData({
         status: 'success',
         fileName: name,
-        filePath: bundle?.filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/src/test/java/com/testforge/${name}`,
-        workspacePath: 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator',
+        filePath: bundle?.filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse/src/test/java/com/testforge/${name}`,
+        workspacePath: 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse',
         instructions: [
-          `File created at: src/test/java/com/testforge/${name}`,
+          `File created at: test_code/eclipse/src/test/java/com/testforge/${name}`,
           '1. Eclipse IDE has opened on your computer',
           '2. File Explorer opened with the generated test file',
           '3. In Eclipse: File -> Import... -> Maven -> Existing Maven Projects',
-          '4. Select root: c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator',
+          '4. Select root: c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse',
           `5. Right-click ${name} -> Run As -> TestNG Test`
         ]
       });
@@ -2472,6 +2513,84 @@ function App() {
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                 <button className="vscode-playwright-btn" onClick={() => setEclipseModalData(null)}>Got it</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VS Code Import Instructions & Status Modal (Identical UX to Eclipse Modal) */}
+      {vsCodeModalData && (
+        <div className="rag-modal-overlay" onClick={() => setVsCodeModalData(null)}>
+          <div className="rag-modal" style={{ maxWidth: 580, height: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="rag-modal-header">
+              <div className="rag-header-left">
+                <div className="rag-badge-icon" style={{ background: '#007acc' }}>
+                  <Code2 size={18} color="#ffffff" />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 16, margin: 0 }}>Visual Studio Code Integration</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Playwright Automation Suite Prepared</p>
+                </div>
+              </div>
+              <button className="rag-close-btn" onClick={() => setVsCodeModalData(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckCircle2 size={18} color="#10b981" />
+                <span style={{ fontSize: 13, color: '#a7f3d0' }}>
+                  Playwright test suite & configuration saved to project disk!
+                </span>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>WORKSPACE PATH TO OPEN IN VS CODE:</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={vsCodeModalData.workspacePath}
+                    style={{ flex: 1, padding: '8px 10px', background: '#0d1117', border: '1px solid var(--border-light)', borderRadius: 6, color: '#fff', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(vsCodeModalData.workspacePath);
+                      alert('Copied workspace path to clipboard!');
+                    }}
+                    className="toolbar-btn"
+                    style={{ fontSize: 11, background: 'var(--bg-3)' }}
+                  >
+                    Copy Path
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ background: '#161b22', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                <strong style={{ fontSize: 12, color: '#fff' }}>Quick VS Code Steps:</strong>
+                <ol style={{ fontSize: 12, color: 'var(--text-2)', paddingLeft: 18, marginTop: 6, lineHeight: 1.6 }}>
+                  <li>Visual Studio Code has opened on your computer</li>
+                  <li>New workspace folder linked in Explorer: <code>{vsCodeModalData.workspacePath.split('/').pop()}</code></li>
+                  <li>Active test file opened in editor: <code>{vsCodeModalData.fileName}</code></li>
+                  <li>Open integrated terminal (<kbd style={{ background: '#21262d', padding: '1px 5px', borderRadius: 3, border: '1px solid #30363d' }}>Ctrl+`</kbd>) and run: <code>npx playwright test</code></li>
+                </ol>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <button 
+                  className="toolbar-btn"
+                  style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                  onClick={() => {
+                    exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName);
+                  }}
+                  title="Trigger VS Code desktop application again"
+                >
+                  <ExternalLink size={13} />
+                  <span>Launch VS Code Again</span>
+                </button>
+                <button className="vscode-playwright-btn" onClick={() => setVsCodeModalData(null)}>Got it</button>
               </div>
             </div>
           </div>

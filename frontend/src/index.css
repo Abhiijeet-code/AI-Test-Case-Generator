@@ -1306,6 +1306,37 @@ button {
   scrollbar-width: thin;
 }
 
+.empty-sessions-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 14px;
+  text-align: center;
+  color: var(--text-3);
+  background: rgba(22, 27, 34, 0.45);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.empty-sessions-icon {
+  opacity: 0.35;
+  margin-bottom: 8px;
+}
+
+.empty-sessions-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.empty-sessions-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+
 .session-card {
   padding: 8px 10px;
   border-radius: 8px;

@@ -27,7 +27,7 @@ import {
   Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import Sidebar from './components/Sidebar';
+import Sidebar, { DEMO_SESSIONS } from './components/Sidebar';
 import type { ChatSession } from './components/Sidebar';
 import SettingsModal from './components/SettingsModal';
 import RagWorkflowModal from './components/RagWorkflowModal';
@@ -566,10 +566,13 @@ function App() {
   // ─── Chat session management ────────────────────────────
   const [chatHistory, setChatHistory] = useState<ChatSession[]>(() => {
     try {
+      if (localStorage.getItem('chatHistory_cleared') === 'true') {
+        return [];
+      }
       const saved = localStorage.getItem('chatHistory');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    return [];
+    return DEMO_SESSIONS;
   });
   const [activeChatId, setActiveChatId] = useState<string | null>(() => {
     return localStorage.getItem('activeChatId') || null;
@@ -648,7 +651,15 @@ function App() {
   }, [activeChatId, messages, chatStore]);
 
   const handleDeleteChat = useCallback((id: string) => {
-    setChatHistory((prev) => prev.filter((c) => c.id !== id));
+    setChatHistory((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      if (next.length === 0) {
+        try {
+          localStorage.setItem('chatHistory_cleared', 'true');
+        } catch (e) {}
+      }
+      return next;
+    });
     setChatStore((prev) => {
       const copy = { ...prev };
       delete copy[id];
@@ -661,12 +672,16 @@ function App() {
   }, [activeChatId]);
 
   const handleClearAllChats = useCallback(() => {
-    if (window.confirm('Clear all session history?')) {
-      setChatHistory([]);
-      setChatStore({});
-      setMessages([]);
-      setActiveChatId(null);
-    }
+    setChatHistory([]);
+    setChatStore({});
+    setMessages([]);
+    setActiveChatId(null);
+    try {
+      localStorage.setItem('chatHistory', '[]');
+      localStorage.setItem('chatHistory_cleared', 'true');
+      localStorage.setItem('chatStore', '{}');
+      localStorage.removeItem('activeChatId');
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
@@ -701,6 +716,9 @@ function App() {
       const titleText = trimmed || docMeta?.name || 'New Test Generation';
       const title = titleText.length > 36 ? titleText.slice(0, 36) + '…' : titleText;
       setActiveChatId(chatId);
+      try {
+        localStorage.removeItem('chatHistory_cleared');
+      } catch (e) {}
       setChatHistory((prev) => {
         const updated = [{ 
           id: chatId!, 

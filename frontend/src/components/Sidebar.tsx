@@ -22,7 +22,7 @@ interface SidebarProps {
 }
 
 // Default showcase sessions matching the screenshot
-const DEMO_SESSIONS: ChatSession[] = [
+export const DEMO_SESSIONS: ChatSession[] = [
   {
     id: 'demo_1',
     title: 'Auth Flow Multi-Tenant',
@@ -109,10 +109,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Combine real user sessions with showcase items if user has few sessions
-  const displaySessions = chatHistory.length > 0 
-    ? chatHistory 
-    : DEMO_SESSIONS;
+  // Display real user sessions directly from chatHistory
+  const displaySessions = chatHistory;
 
   const filteredSessions = displaySessions.filter((s) => 
     s.title.toLowerCase().includes(filterText.toLowerCase()) ||
@@ -244,8 +242,16 @@ const Sidebar: React.FC<SidebarProps> = ({
               <Clock size={12} style={{ display: 'inline', marginRight: 5, verticalAlign: -1 }} />
               RECENT SESSIONS
             </span>
-            {onClearAllChats && (
-              <button className="clear-all-btn" onClick={onClearAllChats}>
+            {onClearAllChats && chatHistory.length > 0 && (
+              <button 
+                type="button" 
+                className="clear-all-btn" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearAllChats();
+                }}
+                title="Clear all session history"
+              >
                 clear
               </button>
             )}
@@ -253,29 +259,39 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sessions List */}
       <div className="sidebar-session-list">
-        {filteredSessions.map((session) => {
-          const isActive = session.id === activeChatId;
-          const badgeText = session.badge || (session.id === 'demo_1' ? '42 tests' : 'E2E');
-          const tagText = session.tag || '#PROJ-1024';
+        {filteredSessions.length === 0 ? (
+          <div className="empty-sessions-state">
+            <Clock size={18} className="empty-sessions-icon" />
+            <span className="empty-sessions-text">
+              {filterText ? 'No matching sessions' : 'No recent sessions'}
+            </span>
+            <span className="empty-sessions-sub">
+              {filterText ? 'Try a different filter' : 'History cleared'}
+            </span>
+          </div>
+        ) : (
+          filteredSessions.map((session) => {
+            const isActive = session.id === activeChatId;
+            const badgeText = session.badge || (session.id === 'demo_1' ? '42 tests' : 'E2E');
+            const tagText = session.tag || '#PROJ-1024';
 
-          return (
-            <div
-              key={session.id}
-              className={`session-card ${isActive ? 'active' : ''}`}
-              onClick={() => onSelectChat(session.id)}
-            >
-              <div className="session-card-top">
-                <span className="session-card-title" title={session.title}>
-                  {session.title}
-                </span>
-                <span className="session-badge" style={{ color: session.badgeColor || '#79c0ff' }}>
-                  {badgeText}
-                </span>
-              </div>
-              <div className="session-card-bottom">
-                <span className="session-tag">{tagText}</span>
-                <span className="session-time">{formatTimestamp(session.timestamp, session.id)}</span>
-                {chatHistory.some(c => c.id === session.id) && (
+            return (
+              <div
+                key={session.id}
+                className={`session-card ${isActive ? 'active' : ''}`}
+                onClick={() => onSelectChat(session.id)}
+              >
+                <div className="session-card-top">
+                  <span className="session-card-title" title={session.title}>
+                    {session.title}
+                  </span>
+                  <span className="session-badge" style={{ color: session.badgeColor || '#79c0ff' }}>
+                    {badgeText}
+                  </span>
+                </div>
+                <div className="session-card-bottom">
+                  <span className="session-tag">{tagText}</span>
+                  <span className="session-time">{formatTimestamp(session.timestamp, session.id)}</span>
                   <button 
                     className="session-delete-btn"
                     onClick={(e) => {
@@ -286,11 +302,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Trash2 size={12} />
                   </button>
-                )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Sidebar Footer: Clean workspace status indicator */}

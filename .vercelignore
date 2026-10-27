@@ -1,0 +1,7 @@
+# Vercel Ignore
+backend/Dockerfile
+test_code/
+.git
+.agents
+local_backend.js
+node_modules

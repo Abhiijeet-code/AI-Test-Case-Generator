@@ -495,6 +495,7 @@ function App() {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('typescript');
   const [isFrameworkEnabled, setIsFrameworkEnabled] = useState<boolean>(false);
   const [showTestCaseOnlyPopup, setShowTestCaseOnlyPopup] = useState<boolean>(false);
+  const [testCaseOnlyPopupMsg, setTestCaseOnlyPopupMsg] = useState<string>('Test Case Only');
   const [eclipseModalData, setEclipseModalData] = useState<{
     status: string;
     fileName: string;
@@ -542,6 +543,14 @@ function App() {
   const [template, setTemplate] = useState<TestTemplate>('Functional & E2E');
   const [copied, setCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+
+  // When 'Code Generation Only' is selected, 'none' (Test Cases Only) cannot be selected or active
+  useEffect(() => {
+    if (template === 'Code Generation Only' && selectedFramework === 'none') {
+      setSelectedFramework('playwright');
+      if (!selectedLanguage) setSelectedLanguage('typescript');
+    }
+  }, [template, selectedFramework, selectedLanguage]);
   
   // docMeta holds only file metadata; raw text lives server-side referenced by sessionDocId
   const [docMeta, setDocMeta] = useState<{
@@ -1410,6 +1419,10 @@ function App() {
                     onClick={() => {
                       setInput('Code Generation for payment gateway webhook deduplication');
                       setTemplate('Code Generation Only');
+                      if (selectedFramework === 'none') {
+                        setSelectedFramework('playwright');
+                        if (!selectedLanguage) setSelectedLanguage('typescript');
+                      }
                     }}
                   >
                     <span>#</span> Code Generation Only
@@ -1730,6 +1743,7 @@ function App() {
                             className={`banner-toggle-switch ${selectedFramework === 'none' ? 'disabled' : (isFrameworkEnabled ? 'on' : 'off')}`}
                             onClick={() => {
                               if (selectedFramework === 'none') {
+                                setTestCaseOnlyPopupMsg('Test Case Only');
                                 setShowTestCaseOnlyPopup(true);
                                 setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
                                 return;
@@ -1893,16 +1907,32 @@ function App() {
                       <div className="framework-popover-section">
                         <div className="framework-section-title">📋 QA Specifications</div>
                         <div 
-                          className={`framework-option ${selectedFramework === 'none' ? 'selected' : ''}`}
+                          className={`framework-option ${selectedFramework === 'none' ? 'selected' : ''} ${template === 'Code Generation Only' ? 'disabled' : ''}`}
                           onClick={() => {
+                            if (template === 'Code Generation Only') {
+                              setTestCaseOnlyPopupMsg('Test Cases disabled in Code Only mode');
+                              setShowTestCaseOnlyPopup(true);
+                              setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
+                              return;
+                            }
                             setSelectedFramework('none');
                             setIsFrameworkEnabled(false);
                             setIsFrameworkDropdownOpen(false);
                           }}
+                          title={template === 'Code Generation Only' ? 'Disabled: Code Generation Only template is active' : 'Generate Test Cases'}
                         >
                           <div className="framework-opt-info">
-                            <span className="framework-opt-name">Generate Test Cases</span>
-                            <span className="framework-opt-desc">Functional, negative & boundary test cases</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span className="framework-opt-name">Generate Test Cases</span>
+                              {template === 'Code Generation Only' && (
+                                <span style={{ fontSize: 9.5, padding: '1px 6px', background: '#30363d', color: '#f85149', borderRadius: 4, fontWeight: 600 }}>
+                                  Unavailable in Code Only
+                                </span>
+                              )}
+                            </div>
+                            <span className="framework-opt-desc">
+                              {template === 'Code Generation Only' ? 'Switch template away from Code Generation to enable' : 'Functional, negative & boundary test cases'}
+                            </span>
                           </div>
                           {selectedFramework === 'none' && <Check size={14} className="framework-check" />}
                         </div>
@@ -1916,7 +1946,7 @@ function App() {
                   {showTestCaseOnlyPopup && (
                     <div className="test-case-only-popup" role="alert">
                       <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
-                      <span>Test Case Only</span>
+                      <span>{testCaseOnlyPopupMsg}</span>
                     </div>
                   )}
 
@@ -1925,6 +1955,7 @@ function App() {
                     className={`framework-toggle-btn ${selectedFramework === 'none' ? 'disabled' : (isFrameworkEnabled ? 'active' : '')}`}
                     onClick={() => {
                       if (selectedFramework === 'none') {
+                        setTestCaseOnlyPopupMsg('Test Case Only');
                         setShowTestCaseOnlyPopup(true);
                         setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
                         return;

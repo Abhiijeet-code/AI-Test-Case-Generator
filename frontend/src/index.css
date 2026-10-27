@@ -2924,6 +2924,18 @@ button {
   color: #79c0ff;
 }
 
+.framework-option.disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  background: transparent !important;
+  color: #8b949e !important;
+}
+
+.framework-option.disabled:hover {
+  background: rgba(248, 81, 73, 0.08) !important;
+  color: #f85149 !important;
+}
+
 .framework-opt-info {
   display: flex;
   flex-direction: column;

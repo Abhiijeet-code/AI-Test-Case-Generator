@@ -364,24 +364,14 @@ function CodeAutomationCard({
           </button>
 
           {bundle.framework === 'selenium' ? (
-            <>
-              <button
-                onClick={() => onOpenEclipse ? onOpenEclipse(bundle) : alert('Opening Eclipse')}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', background: 'linear-gradient(135deg, #4c1d95, #6d28d9)', border: '1px solid #8b5cf6', borderRadius: 4, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                title="Open Selenium test project in Eclipse IDE"
-              >
-                <Coffee size={12} color="#fcd34d" />
-                <span>Open in Eclipse</span>
-              </button>
-              <button
-                onClick={handleDefaultOpenVsCode}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#21262d', border: '1px solid #30363d', borderRadius: 4, color: '#c9d1d9', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                title="Launch in VS Code"
-              >
-                <ExternalLink size={12} />
-                <span>VS Code</span>
-              </button>
-            </>
+            <button
+              onClick={() => onOpenEclipse ? onOpenEclipse(bundle) : alert('Opening Eclipse')}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', background: 'linear-gradient(135deg, #4c1d95, #6d28d9)', border: '1px solid #8b5cf6', borderRadius: 4, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              title="Open Selenium test project strictly in Eclipse IDE"
+            >
+              <Coffee size={12} color="#fcd34d" />
+              <span>Open in Eclipse</span>
+            </button>
           ) : (
             <button
               onClick={handleDefaultOpenVsCode}
@@ -508,6 +498,7 @@ function App() {
     fileName: string;
     filePath: string;
     workspacePath: string;
+    vscodeUri?: string;
     instructions: string[];
   } | null>(null);
 
@@ -2578,18 +2569,29 @@ function App() {
                 </ol>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                <button 
-                  className="toolbar-btn"
-                  style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                  onClick={() => {
-                    exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName);
-                  }}
-                  title="Trigger VS Code desktop application again"
-                >
-                  <ExternalLink size={13} />
-                  <span>Launch VS Code Again</span>
-                </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button 
+                    className="toolbar-btn"
+                    style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => {
+                      exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName);
+                    }}
+                    title="Launch VS Code desktop application on this computer"
+                  >
+                    <ExternalLink size={13} />
+                    <span>Launch in VS Code</span>
+                  </button>
+                  <a
+                    href={vsCodeModalData.vscodeUri || `vscode://file/${vsCodeModalData.filePath}`}
+                    className="toolbar-btn"
+                    style={{ background: '#1f2937', color: '#38bdf8', border: '1px solid #38bdf840', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    title="Direct deep link to open in VS Code on any laptop"
+                  >
+                    <Code2 size={13} />
+                    <span>VS Code Protocol Link</span>
+                  </a>
+                </div>
                 <button className="vscode-playwright-btn" onClick={() => setVsCodeModalData(null)}>Got it</button>
               </div>
             </div>

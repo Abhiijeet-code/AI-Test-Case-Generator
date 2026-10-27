@@ -1500,11 +1500,20 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
       const forwardSlashTargetFile = targetFile.replace(/\\/g, '/');
       const forwardSlashTargetFolder = targetFolder.replace(/\\/g, '/');
 
-      // Execute code command to open in VS Code reliably on Windows linking workspace and opening target file
-      const fullCodeCmd = path.join(process.env.LOCALAPPDATA || 'C:\\Users\\abhid\\AppData\\Local', 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd');
-      const cmdToRun = fs.existsSync(fullCodeCmd)
-        ? `"${fullCodeCmd}" "${targetFolder}" -g "${targetFile}"`
-        : `cmd.exe /c code "${targetFolder}" -g "${targetFile}"`;
+      // Execute code command to open in VS Code reliably on ANY laptop (Windows, macOS, Linux)
+      let cmdToRun = `code "${targetFolder}" -g "${targetFile}"`;
+      if (process.platform === 'win32') {
+        const candidates = [
+          process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd') : null,
+          process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'bin', 'code.cmd') : null,
+          process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'bin', 'code.cmd') : null
+        ].filter(Boolean);
+        const found = candidates.find(p => fs.existsSync(p));
+        cmdToRun = found ? `"${found}" "${targetFolder}" -g "${targetFile}"` : `cmd.exe /c code "${targetFolder}" -g "${targetFile}"`;
+      } else if (process.platform === 'darwin') {
+        const macApp = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code';
+        cmdToRun = fs.existsSync(macApp) ? `"${macApp}" "${targetFolder}" -g "${targetFile}"` : `code "${targetFolder}" -g "${targetFile}"`;
+      }
 
       exec(cmdToRun, (cliErr) => {
         if (cliErr) {
@@ -1538,33 +1547,54 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
 
       const targetFile = filePath || bundle.filePath;
 
-      // Candidate paths for Eclipse on this system
-      const candidatePaths = [
-        'C:\\Users\\abhid\\Downloads\\eclipse-jee-2023-12-R-win32-x86_64\\eclipse\\eclipse.exe',
-        path.join(process.env.USERPROFILE || 'C:\\Users\\abhid', 'eclipse', 'jee-latest-released', 'eclipse', 'eclipse.exe'),
-        'C:\\Program Files\\Eclipse Foundation\\eclipse.exe',
-        'C:\\Program Files\\eclipse\\eclipse.exe'
-      ];
+      // Candidate paths for Eclipse on any system
+      let eclipseCmd = `cmd.exe /c start eclipse -data "${ECLIPSE_ROOT}"`;
+      if (process.platform === 'win32') {
+        const userDir = process.env.USERPROFILE || '';
+        const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+        const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
 
-      const eclipseExe = candidatePaths.find(p => fs.existsSync(p));
+        const candidates = [
+          path.join(userDir, 'eclipse', 'jee-latest-released', 'eclipse', 'eclipse.exe'),
+          path.join(userDir, 'eclipse', 'committers-latest-released', 'eclipse', 'eclipse.exe'),
+          path.join(userDir, 'eclipse', 'java-latest-released', 'eclipse', 'eclipse.exe'),
+          path.join(progFiles, 'Eclipse Foundation', 'eclipse.exe'),
+          path.join(progFiles, 'eclipse', 'eclipse.exe'),
+          path.join(progFilesX86, 'eclipse', 'eclipse.exe')
+        ];
 
-      // 1. Launch Eclipse IDE with -data pointing to ECLIPSE_ROOT
-      if (eclipseExe) {
-        exec(`cmd.exe /c start "" "${eclipseExe}" -data "${ECLIPSE_ROOT}"`, (err) => {
-          if (err) console.warn('Eclipse launch notice:', err.message);
-          else console.log('Eclipse IDE successfully launched from:', eclipseExe);
-        });
+        // Search Downloads folder dynamically on any laptop
+        if (userDir && fs.existsSync(path.join(userDir, 'Downloads'))) {
+          try {
+            const dlFiles = fs.readdirSync(path.join(userDir, 'Downloads'));
+            for (const f of dlFiles) {
+              if (f.toLowerCase().includes('eclipse')) {
+                const checkExe = path.join(userDir, 'Downloads', f, 'eclipse', 'eclipse.exe');
+                if (fs.existsSync(checkExe)) candidates.unshift(checkExe);
+              }
+            }
+          } catch (e) {}
+        }
+
+        const found = candidates.find(p => fs.existsSync(p));
+        if (found) {
+          eclipseCmd = `cmd.exe /c start "" "${found}" -data "${ECLIPSE_ROOT}"`;
+        }
+      } else if (process.platform === 'darwin') {
+        eclipseCmd = `open -a "Eclipse" --args -data "${ECLIPSE_ROOT}"`;
       } else {
-        exec(`cmd.exe /c start eclipse -data "${ECLIPSE_ROOT}"`, (err) => {
-          if (err) console.warn('Eclipse start notice:', err.message);
-        });
+        eclipseCmd = `eclipse -data "${ECLIPSE_ROOT}" &`;
       }
 
-      // 2. Open Windows Explorer with the generated Java test class selected inside ECLIPSE_ROOT
-      if (fs.existsSync(targetFile)) {
-        exec(`explorer.exe /select,"${targetFile}"`);
-      } else {
-        exec(`explorer.exe "${ECLIPSE_ROOT}"`);
+      exec(eclipseCmd, (err) => {
+        if (err) console.warn('Eclipse launch notice:', err.message);
+        else console.log('Eclipse IDE launched successfully');
+      });
+
+      // Open File Explorer to the generated file
+      if (process.platform === 'win32') {
+        if (fs.existsSync(targetFile)) exec(`explorer.exe /select,"${targetFile}"`);
+        else exec(`explorer.exe "${ECLIPSE_ROOT}"`);
       }
 
       return sendJson(res, 200, {

@@ -545,23 +545,34 @@ export const generateTestCase = async (
 };
 
 export const launchEclipseApi = async (jiraId?: string, requirement?: string, filePath?: string, fileName?: string) => {
+  const payload = { jiraId, requirement, filePath, fileName };
+  // 1. Try local companion daemon if running on this laptop
   try {
-    const res = await api.post('/launch-eclipse', { jiraId, requirement, filePath, fileName });
+    const localRes = await axios.post('http://127.0.0.1:3001/api/launch-eclipse', payload, { timeout: 800 });
+    if (localRes?.data?.status === 'success' || localRes?.data?.workspacePath) {
+      return localRes.data;
+    }
+  } catch {
+    // Local daemon not active, fallback to cloud API
+  }
+
+  try {
+    const res = await api.post('/launch-eclipse', payload);
     return res.data;
   } catch (err) {
     const name = fileName || (requirement?.toLowerCase().includes('amazon') ? 'AmazonLoginSeleniumTest.java' : `${jiraId || 'TestForge'}_SeleniumTest.java`);
-    const path = filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/src/test/java/com/testforge/${name}`;
+    const path = filePath || `test_code/eclipse/src/test/java/com/testforge/${name}`;
     return {
       status: 'success',
       ide: 'eclipse',
       fileName: name,
       filePath: path,
-      workspacePath: 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator',
+      workspacePath: 'test_code/eclipse',
       instructions: [
         `File created at: ${path}`,
-        '1. Open Eclipse IDE',
-        '2. File -> Import... -> Maven -> Existing Maven Projects',
-        '3. Select root: c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator',
+        '1. Eclipse Workspace Root: test_code/eclipse',
+        '2. In Eclipse IDE: File -> Import... -> Maven -> Existing Maven Projects',
+        '3. Select root: test_code/eclipse',
         `4. Right-click ${name} -> Run As -> TestNG Test`
       ]
     };
@@ -687,7 +698,18 @@ export const exportVsCodeApi = async (
   isFullFramework: boolean = true,
   specCode?: string
 ) => {
-  const res = await api.post('/export-vscode', { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework, specCode });
+  const payload = { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework, specCode };
+  // 1. Try local companion daemon if running on this laptop
+  try {
+    const localRes = await axios.post('http://127.0.0.1:3001/api/export-vscode', payload, { timeout: 800 });
+    if (localRes?.data?.status === 'ok' || localRes?.data?.workspacePath) {
+      return localRes.data;
+    }
+  } catch {
+    // Local daemon not active, fallback to cloud API
+  }
+
+  const res = await api.post('/export-vscode', payload);
   return res.data;
 };
 

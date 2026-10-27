@@ -60,11 +60,21 @@ class McpTestRequest(BaseModel):
     tools: Optional[List[str]] = None
 
 class ExportVsCodeRequest(BaseModel):
-    testCases: List[Dict[str, Any]]
+    testCases: Optional[List[Dict[str, Any]]] = None
     title: Optional[str] = "GeneratedTestSuite"
     jiraId: Optional[str] = None
     language: Optional[str] = "typescript"
     framework: Optional[str] = "playwright"
+    filePath: Optional[str] = None
+    fileName: Optional[str] = None
+    isFullFramework: Optional[bool] = True
+    specCode: Optional[str] = None
+
+class LaunchEclipseRequest(BaseModel):
+    jiraId: Optional[str] = None
+    requirement: Optional[str] = None
+    filePath: Optional[str] = None
+    fileName: Optional[str] = None
 
 class RagSimulateRequest(BaseModel):
     query: Optional[str] = "Payment Gateway Webhook Idempotency"

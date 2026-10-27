@@ -492,6 +492,9 @@ function App() {
     filePath: string;
     workspacePath: string;
     instructions: string[];
+    code?: string;
+    pageCode?: string;
+    configCode?: string;
   } | null>(null);
   const [vsCodeModalData, setVsCodeModalData] = useState<{
     status: string;
@@ -500,6 +503,10 @@ function App() {
     workspacePath: string;
     vscodeUri?: string;
     instructions: string[];
+    specCode?: string;
+    pageCode?: string;
+    pageFileName?: string;
+    configCode?: string;
   } | null>(null);
 
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
@@ -854,6 +861,49 @@ function App() {
     }
   };
 
+  const triggerBrowserDownload = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const saveFilesToLocalFolder = async (files: { name: string; content: string; subfolder?: string }[]) => {
+    if ('showDirectoryPicker' in window) {
+      try {
+        const rootHandle = await (window as any).showDirectoryPicker();
+        for (const f of files) {
+          let targetHandle = rootHandle;
+          if (f.subfolder) {
+            const parts = f.subfolder.split('/').filter(Boolean);
+            for (const p of parts) {
+              targetHandle = await targetHandle.getDirectoryHandle(p, { create: true });
+            }
+          }
+          const fileHandle = await targetHandle.getFileHandle(f.name, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(f.content);
+          await writable.close();
+        }
+        alert('Successfully saved test suite files to your local folder!');
+        return true;
+      } catch (e: any) {
+        if (e.name === 'AbortError') return false;
+        console.warn('Directory picker fallback:', e);
+      }
+    }
+    // Universal browser fallback: download files directly
+    for (const f of files) {
+      triggerBrowserDownload(f.content, f.name);
+    }
+    return true;
+  };
+
   // Open directly in VS Code desktop application (calls local backend code.cmd and invokes protocol)
   const handleLaunchInVsCode = async (bundleOrData?: any) => {
     const fw = bundleOrData?.framework || selectedFramework || 'playwright';
@@ -861,11 +911,14 @@ function App() {
     const jId = bundleOrData?.jiraId || undefined;
     const title = bundleOrData?.title || bundleOrData?.fileName || 'Regression Test Suite';
     const filePath = bundleOrData?.filePath;
-    const fileName = bundleOrData?.fileName;
-    const specCode = bundleOrData?.specCode;
+    const fileName = bundleOrData?.fileName || (lang === 'python' ? 'test_suite.py' : (lang === 'java' ? 'PlaywrightTest.java' : 'test.spec.ts'));
+    const specCode = bundleOrData?.specCode || bundleOrData?.code || '';
+    const pageCode = bundleOrData?.pageCode || '';
+    const pageFileName = bundleOrData?.pageFileName || 'AppPage.ts';
+    const configCode = bundleOrData?.configCode || '';
 
     try {
-      // 1. Invoke local backend to save suite in dedicated unique folder under test_code/vscode and launch VS Code
+      // 1. Invoke local backend or cloud API to save suite in dedicated folder and launch VS Code
       const res = await exportVsCodeApi(
         bundleOrData?.suiteCases || [],
         title,
@@ -879,18 +932,29 @@ function App() {
       );
 
       if (res && res.workspacePath) {
-        setVsCodeModalData(res);
+        setVsCodeModalData({
+          ...res,
+          specCode: res.specCode || specCode,
+          pageCode,
+          pageFileName,
+          configCode: res.configCode || configCode
+        });
       } else {
-        const targetPath = filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode/tests/${fileName || 'test.spec.ts'}`;
-        const wsPath = bundleOrData?.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode';
+        const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
+        const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
         setVsCodeModalData({
           status: 'success',
-          fileName: fileName || 'test.spec.ts',
+          fileName,
           filePath: targetPath,
           workspacePath: wsPath,
+          vscodeUri: `vscode://file/${targetPath}`,
+          specCode,
+          pageCode,
+          pageFileName,
+          configCode,
           instructions: [
             `Test files saved to: ${wsPath}`,
-            '1. VS Code opened on your computer with workspace linked',
+            '1. VS Code workspace folder linked on your computer',
             '2. Test suite opened in active editor tab',
             '3. Run in VS Code terminal: npx playwright test'
           ]
@@ -898,16 +962,21 @@ function App() {
       }
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
-      const targetPath = filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode/tests/${fileName || 'test.spec.ts'}`;
-      const wsPath = bundleOrData?.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode';
+      const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
+      const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
       setVsCodeModalData({
         status: 'success',
-        fileName: fileName || 'test.spec.ts',
+        fileName,
         filePath: targetPath,
         workspacePath: wsPath,
+        vscodeUri: `vscode://file/${targetPath}`,
+        specCode,
+        pageCode,
+        pageFileName,
+        configCode,
         instructions: [
           `Test files saved to: ${wsPath}`,
-          '1. VS Code opened on your computer with workspace linked',
+          '1. VS Code workspace folder linked on your computer',
           '2. Test suite opened in active editor tab',
           '3. Run in VS Code terminal: npx playwright test'
         ]
@@ -1155,23 +1224,34 @@ function App() {
   const handleOpenEclipse = async (bundle?: CodeBundle) => {
     const jId = bundle?.jiraId || undefined;
     const req = bundle?.fileName || input.trim() || 'Amazon Login test case';
+    const name = bundle?.fileName || 'AmazonLoginSeleniumTest.java';
+    const code = bundle?.specCode || '';
+    const pageCode = bundle?.pageCode || '';
+    const pomCode = bundle?.configCode || '';
+
     try {
       const res = await launchEclipseApi(jId, req, bundle?.filePath, bundle?.fileName);
-      setEclipseModalData(res);
+      setEclipseModalData({
+        ...res,
+        code,
+        pageCode,
+        configCode: pomCode
+      });
     } catch {
-      const name = bundle?.fileName || 'AmazonLoginSeleniumTest.java';
       setEclipseModalData({
         status: 'success',
         fileName: name,
-        filePath: bundle?.filePath || `c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse/src/test/java/com/testforge/${name}`,
-        workspacePath: 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse',
+        filePath: bundle?.filePath || `test_code/eclipse/src/test/java/com/testforge/${name}`,
+        workspacePath: 'test_code/eclipse',
+        code,
+        pageCode,
+        configCode: pomCode,
         instructions: [
           `File created at: test_code/eclipse/src/test/java/com/testforge/${name}`,
-          '1. Eclipse IDE has opened on your computer',
-          '2. File Explorer opened with the generated test file',
-          '3. In Eclipse: File -> Import... -> Maven -> Existing Maven Projects',
-          '4. Select root: c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/eclipse',
-          `5. Right-click ${name} -> Run As -> TestNG Test`
+          '1. Eclipse Workspace Root: test_code/eclipse',
+          '2. In Eclipse IDE: File -> Import... -> Maven -> Existing Maven Projects',
+          '3. Select root: test_code/eclipse',
+          `4. Right-click ${name} -> Run As -> TestNG Test`
         ]
       });
     }
@@ -2475,12 +2555,12 @@ function App() {
                   <input
                     type="text"
                     readOnly
-                    value={eclipseModalData.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator'}
+                    value={eclipseModalData.workspacePath || 'test_code/eclipse'}
                     style={{ flex: 1, padding: '8px 10px', background: '#0d1117', border: '1px solid var(--border-light)', borderRadius: 6, color: '#fff', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}
                   />
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(eclipseModalData.workspacePath || 'c:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator');
+                      navigator.clipboard.writeText(eclipseModalData.workspacePath || 'test_code/eclipse');
                       alert('Copied workspace path to clipboard!');
                     }}
                     className="toolbar-btn"
@@ -2494,7 +2574,8 @@ function App() {
               <div style={{ background: '#161b22', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
                 <strong style={{ fontSize: 12, color: '#fff' }}>Quick Eclipse Import Steps:</strong>
                 <ol style={{ fontSize: 12, color: 'var(--text-2)', paddingLeft: 18, marginTop: 6, lineHeight: 1.6 }}>
-                  <li>Launch <strong>Eclipse IDE</strong></li>
+                  <li>Click <strong>Save to Local Disk</strong> below to place files into your local <code>test_code/eclipse</code> directory</li>
+                  <li>Launch <strong>Eclipse IDE</strong> on your computer</li>
                   <li>Click <strong>File ➔ Import...</strong></li>
                   <li>Select <strong>Maven ➔ Existing Maven Projects</strong> and click Next</li>
                   <li>Paste the workspace root folder copied above into <strong>Root Directory</strong></li>
@@ -2502,7 +2583,22 @@ function App() {
                 </ol>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                <button
+                  className="toolbar-btn"
+                  style={{ background: '#10b981', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => {
+                    saveFilesToLocalFolder([
+                      { name: eclipseModalData.fileName, content: eclipseModalData.code || '// Selenium Test Class\n', subfolder: 'src/test/java/com/testforge' },
+                      ...(eclipseModalData.pageCode ? [{ name: 'AmazonLoginPage.java', content: eclipseModalData.pageCode, subfolder: 'src/main/java/com/testforge/pages' }] : []),
+                      { name: 'pom.xml', content: eclipseModalData.configCode || '<project xmlns="http://maven.apache.org/POM/4.0.0">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>com.testforge</groupId>\n  <artifactId>selenium-tests</artifactId>\n  <version>1.0.0</version>\n</project>' }
+                    ]);
+                  }}
+                  title="Save or download Selenium test suite files to your local folder on any laptop"
+                >
+                  <Download size={13} />
+                  <span>Save to Local Disk</span>
+                </button>
                 <button className="vscode-playwright-btn" onClick={() => setEclipseModalData(null)}>Got it</button>
               </div>
             </div>
@@ -2571,6 +2667,21 @@ function App() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    className="toolbar-btn"
+                    style={{ background: '#10b981', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 5, fontWeight: 600, cursor: 'pointer' }}
+                    onClick={() => {
+                      saveFilesToLocalFolder([
+                        { name: vsCodeModalData.fileName, content: vsCodeModalData.specCode || '// Playwright Test Suite\n', subfolder: 'tests' },
+                        ...(vsCodeModalData.pageCode ? [{ name: vsCodeModalData.pageFileName || 'AppPage.ts', content: vsCodeModalData.pageCode, subfolder: 'pages' }] : []),
+                        ...(vsCodeModalData.configCode ? [{ name: 'playwright.config.ts', content: vsCodeModalData.configCode }] : [])
+                      ]);
+                    }}
+                    title="Save or download Playwright test suite files directly to your local folder on any laptop"
+                  >
+                    <Download size={13} />
+                    <span>Save to Local Disk</span>
+                  </button>
                   <button 
                     className="toolbar-btn"
                     style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}

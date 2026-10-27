@@ -17,6 +17,7 @@ from app.models import (
     ConfigPayload,
     McpTestRequest,
     ExportVsCodeRequest,
+    LaunchEclipseRequest,
     RagSimulateRequest,
     ChatRequest,
     CodegenFrameworkRequest
@@ -461,14 +462,45 @@ export default defineConfig({
             "3. View UI report: npx playwright show-report"
         ]
 
+    final_filename = req.fileName or filename
+    final_spec_code = req.specCode or spec_code
+    target_filepath = req.filePath or f"test_code/vscode/tests/{final_filename}"
+    target_workspace = "test_code/vscode"
+
     return {
         "status": "ok",
-        "fileName": filename,
+        "fileName": final_filename,
         "language": lang,
-        "specCode": spec_code,
+        "specCode": final_spec_code,
         "configCode": config_code,
-        "vscodeUri": f"vscode://file/tests/{filename}",
+        "filePath": target_filepath,
+        "workspacePath": target_workspace,
+        "vscodeUri": f"vscode://file/{target_filepath}",
         "instructions": instructions
+    }
+
+# ─── Eclipse IDE Integration ───
+
+@app.post("/api/launch-eclipse")
+async def launch_eclipse(req: LaunchEclipseRequest):
+    jira_id = req.jiraId or "SeleniumTest"
+    clean_name = req.fileName or f"{jira_id.replace('-', '_')}SeleniumTest.java"
+    workspace_path = "test_code/eclipse"
+    file_path = req.filePath or f"test_code/eclipse/src/test/java/com/testforge/{clean_name}"
+    return {
+        "status": "success",
+        "ide": "eclipse",
+        "launched": True,
+        "fileName": clean_name,
+        "filePath": file_path,
+        "workspacePath": workspace_path,
+        "instructions": [
+            f"1. Test class location: {file_path}",
+            f"2. Eclipse Workspace Root: {workspace_path}",
+            "3. In Eclipse IDE: File -> Import... -> Maven -> Existing Maven Projects",
+            f"4. Select Root Directory: {workspace_path}",
+            f"5. Right-click on {clean_name} -> Run As -> TestNG Test"
+        ]
     }
 
 # ─── RAG Workflow & Pipeline Explorer ───

@@ -939,15 +939,19 @@ function App() {
           pageFileName,
           configCode: res.configCode || configCode
         });
+        const fallbackPath = filePath || `test_code/vscode/tests/${fileName}`;
+        const targetUri = res.vscodeUri || `vscode://file/${(res.filePath || fallbackPath).replace(/\\/g, '/')}`;
+        try { window.location.href = targetUri; } catch {}
       } else {
         const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
         const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
+        const targetUri = `vscode://file/${targetPath.replace(/\\/g, '/')}`;
         setVsCodeModalData({
           status: 'success',
           fileName,
           filePath: targetPath,
           workspacePath: wsPath,
-          vscodeUri: `vscode://file/${targetPath}`,
+          vscodeUri: targetUri,
           specCode,
           pageCode,
           pageFileName,
@@ -959,17 +963,19 @@ function App() {
             '3. Run in VS Code terminal: npx playwright test'
           ]
         });
+        try { window.location.href = targetUri; } catch {}
       }
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
       const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
       const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
+      const targetUri = `vscode://file/${targetPath.replace(/\\/g, '/')}`;
       setVsCodeModalData({
         status: 'success',
         fileName,
         filePath: targetPath,
         workspacePath: wsPath,
-        vscodeUri: `vscode://file/${targetPath}`,
+        vscodeUri: targetUri,
         specCode,
         pageCode,
         pageFileName,
@@ -981,6 +987,7 @@ function App() {
           '3. Run in VS Code terminal: npx playwright test'
         ]
       });
+      try { window.location.href = targetUri; } catch {}
     }
   };
 
@@ -2686,7 +2693,9 @@ function App() {
                     className="toolbar-btn"
                     style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
                     onClick={() => {
-                      exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName);
+                      const uri = vsCodeModalData.vscodeUri || `vscode://file/${vsCodeModalData.filePath.replace(/\\/g, '/')}`;
+                      try { window.location.href = uri; } catch {}
+                      exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName, true, vsCodeModalData.specCode).catch(() => null);
                     }}
                     title="Launch VS Code desktop application on this computer"
                   >

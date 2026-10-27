@@ -1503,28 +1503,33 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
       const forwardSlashTargetFolder = targetFolder.replace(/\\/g, '/');
 
       // Execute code command to open in VS Code reliably on ANY laptop (Windows, macOS, Linux)
-      let cmdToRun = `code "${targetFolder}" -g "${targetFile}"`;
       if (process.platform === 'win32') {
         const candidates = [
-          process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd') : null,
-          process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'bin', 'code.cmd') : null,
-          process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'bin', 'code.cmd') : null
+          process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe') : null,
+          process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe') : null,
+          process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'Code.exe') : null
         ].filter(Boolean);
         const found = candidates.find(p => fs.existsSync(p));
-        cmdToRun = found ? `"${found}" "${targetFolder}" -g "${targetFile}"` : `cmd.exe /c code "${targetFolder}" -g "${targetFile}"`;
+        const { spawn } = require('node:child_process');
+        if (found) {
+          const child = spawn(found, [targetFolder, '-g', targetFile], { detached: true, stdio: 'ignore' });
+          child.unref();
+          console.log(`VS Code native exe launched: ${found} with workspace: ${targetFolder}`);
+        } else {
+          const child = spawn('cmd.exe', ['/c', 'code', targetFolder, '-g', targetFile], { detached: true, stdio: 'ignore' });
+          child.unref();
+          // Fallback to protocol launch via Windows shell
+          exec(`cmd.exe /c start "" "vscode://file/${forwardSlashTargetFile}"`);
+        }
       } else if (process.platform === 'darwin') {
         const macApp = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code';
-        cmdToRun = fs.existsSync(macApp) ? `"${macApp}" "${targetFolder}" -g "${targetFile}"` : `code "${targetFolder}" -g "${targetFile}"`;
+        const cmdToRun = fs.existsSync(macApp) ? `"${macApp}" "${targetFolder}" -g "${targetFile}"` : `code "${targetFolder}" -g "${targetFile}"`;
+        exec(cmdToRun, (cliErr) => {
+          if (cliErr) exec(`open "vscode://file/${forwardSlashTargetFile}"`);
+        });
+      } else {
+        exec(`code "${targetFolder}" -g "${targetFile}"`);
       }
-
-      exec(cmdToRun, (cliErr) => {
-        if (cliErr) {
-          console.warn('VS Code CLI primary notice:', cliErr.message);
-          exec(`code "${targetFolder}" -g "${targetFile}"`);
-        } else {
-          console.log(`VS Code launched with workspace: ${targetFolder} and file: ${targetFile}`);
-        }
-      });
 
       return sendJson(res, 200, {
         status: 'success',

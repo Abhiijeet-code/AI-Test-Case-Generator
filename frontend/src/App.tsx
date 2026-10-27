@@ -43,12 +43,11 @@ import {
   getSettings
 } from './api';
 
-type TestTemplate = 'Functional & E2E' | 'Code Generation Only' | 'Boundary & Edge' | 'Playwright E2E Suite' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
+type TestTemplate = 'Functional & E2E' | 'Code Generation Only' | 'Boundary & Edge' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
 const TEMPLATES: TestTemplate[] = [
   'Functional & E2E',
   'Code Generation Only',
   'Boundary & Edge',
-  'Playwright E2E Suite',
   'BDD Gherkin Matrix',
   'Security Boundary Matrix',
   'Smoke Test'
@@ -1409,11 +1408,11 @@ function App() {
                   <button 
                     className="hero-chip-btn"
                     onClick={() => {
-                      setInput('Playwright E2E Suite for payment gateway webhook deduplication');
-                      setTemplate('Playwright E2E Suite');
+                      setInput('Code Generation for payment gateway webhook deduplication');
+                      setTemplate('Code Generation Only');
                     }}
                   >
-                    <span>#</span> Playwright E2E Suite
+                    <span>#</span> Code Generation Only
                   </button>
                   <button 
                     className="hero-chip-btn"

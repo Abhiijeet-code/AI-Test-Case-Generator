@@ -553,8 +553,48 @@ body {
 .tc-field strong { color: var(--text-1); font-weight: 600; }
 .tc-li { color: var(--text-2); margin-left: 1.2rem; margin: 0.15rem 0 0.15rem 1.2rem; }
 .tc-step { color: var(--text-2); }
-.tc-p { color: var(--text-2); line-height: 1.5; margin: 0.1rem 0; }
+.tc-p { color: var(--text-2); line-height: 1.5; margin: 0.25rem 0; }
 .tc-divider { border: none; border-top: 1px dashed var(--border); margin: 1rem 0; }
+
+.tc-inline-code {
+  background: #21262d;
+  color: #79c0ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  border: 1px solid rgba(121, 192, 255, 0.15);
+}
+
+.tc-code-block-wrapper {
+  position: relative;
+  margin: 10px 0;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tc-code-lang {
+  background: #161b22;
+  color: #8b949e;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #21262d;
+}
+
+.tc-code-pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #e6edf3;
+}
 
 /* ─── Input Area ─────────────────────────────────────────────── */
 .input-area {
@@ -1730,7 +1770,7 @@ button {
 /* Input Row Container */
 .input-row-container {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   background: #161b22;
   border: 1px solid var(--border-light);
   border-radius: 10px;
@@ -1740,6 +1780,7 @@ button {
   width: 100%;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
 .input-row-container:focus-within {
@@ -1757,6 +1798,7 @@ button {
   color: #79c0ff;
   font-family: 'JetBrains Mono', monospace;
   flex-shrink: 0;
+  margin-bottom: 3px;
 }
 
 .main-text-input {
@@ -1767,13 +1809,29 @@ button {
   color: var(--text-1);
   font-size: 14px;
   line-height: 1.5;
-  font-family: 'Inter', sans-serif;
-  padding: 4px 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 5px 0;
+  resize: none;
+  min-height: 26px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .main-text-input::placeholder {
   color: var(--text-3);
   font-size: 13.5px;
+}
+
+.main-text-input::-webkit-scrollbar {
+  width: 5px;
+}
+
+.main-text-input::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
 }
 
 .code-mode-btn {
@@ -1789,6 +1847,7 @@ button {
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.2s;
+  margin-bottom: 2px;
 }
 
 .code-mode-btn:hover {
@@ -1800,6 +1859,8 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 
 .btn-send-execute {

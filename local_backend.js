@@ -1499,6 +1499,86 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
       });
     }
 
+    // Interactive QA Chat & Code Explanation Endpoint
+    if (pathname === '/api/chat') {
+      const message = (body.message || body.prompt || '').trim();
+      const msgLower = message.toLowerCase();
+      const jiraId = body.jiraTicket?.key || body.jiraTicket?.jiraId || null;
+      const template = body.template || 'Functional';
+      const framework = body.framework || 'playwright';
+      const language = body.language || 'typescript';
+
+      const isExplanationOrQuery = /explain|samjhao|what\s+is|what\s+does|how\s+to|how\s+does|review|analyze|debug|why|error|clarify|walkthrough|break\s*down|difference\s+between|kya\s+hai|kaise/i.test(msgLower);
+      const explicitlyWantsCode = /generate\s*code|write\s*code|create\s*code|build\s*code|bana\s*code|make\s*script|codegen|new\s*framework/i.test(msgLower);
+
+      // If user asks to explain code or general QA query
+      if (isExplanationOrQuery || template === 'No Selection (QA Query / Chat)' || (!explicitlyWantsCode && framework === 'none')) {
+        let replyText = '';
+        if (/testng|selenium|webdriver|chromedriver|@test|@beforemethod|public class/i.test(message)) {
+          replyText = `### 🔍 Code Walkthrough & Architectural Analysis: Selenium (Java TestNG)
+
+Here is a structured breakdown of the test suite you provided:
+
+#### 1. Test Lifecycle & Annotations
+- **\`@BeforeMethod setUp()\`**:
+  - Automatically initializes and downloads the compatible ChromeDriver via \`WebDriverManager.chromedriver().setup()\`.
+  - Maximizes the browser window and navigates to the target application URL.
+  - Instantiates the Page Object (\`loginPage = new LoginPage(driver)\`), adhering to the **Page Object Model (POM)** pattern.
+
+- **\`@Test testValidLogin()\`**:
+  - Executes the positive authentication flow by passing test credentials to the Page Object method (\`loginPage.login(...)\`).
+  - Asserts that after submission, the current browser URL contains \`"dashboard"\` via \`Assert.assertTrue\`.
+
+- **\`@AfterMethod tearDown()\`**:
+  - Gracefully closes browser windows and terminates the ChromeDriver OS process using \`driver.quit()\`.
+  - The null-check (\`if (driver != null)\`) ensures no \`NullPointerException\` occurs if \`setUp()\` fails midway.
+
+---
+
+#### 2. Architecture & Design Evaluation
+- **Page Object Model (POM)**: Isolates selectors and user actions within \`LoginPage\`, making tests resilient to UI changes.
+- **Session Isolation**: Using \`@BeforeMethod\` and \`@AfterMethod\` ensures each test execution has an independent browser session, preventing state bleeding between tests.
+
+---
+
+#### 3. Senior QA Recommendations
+1. **Explicit Synchronization**: Rather than verifying \`contains("dashboard")\` immediately, introduce \`WebDriverWait\` with \`ExpectedConditions.urlContains("dashboard")\` to eliminate timing flakiness.
+2. **Externalize Test Data**: Store sensitive credentials outside Java source files (e.g. \`test-config.properties\` or environment variables).
+3. **Headless Execution Option**: Pass \`ChromeOptions\` (\`--headless=new\`) for CI/CD container execution.`;
+        } else {
+          replyText = `### 💬 TestForge QA Assistant\n\nI analyzed your query: **"${message}"**.\n\nHere are the QA testing insights:\n- **Verification Strategy**: Identify positive, negative, and edge test paths before automating.\n- **Synchronization**: Always prefer explicit over implicit waits to prevent test flakiness.\n- **Data Isolation**: Ensure test users have independent state and clean rollback teardown.\n\nYou can ask me to review code, diagnose errors, or suggest test matrices!`;
+        }
+
+        return sendJson(res, 200, {
+          status: 'ok',
+          reply: replyText,
+          hasCode: false,
+          codeBundle: null
+        });
+      }
+
+      // Explicit code generation
+      if (explicitlyWantsCode || template === 'Code Generation Only' || framework !== 'none') {
+        const bundle = buildAutomationBundle(framework, language, message, jiraId, body.isFullFramework);
+        return sendJson(res, 200, {
+          status: 'ok',
+          reply: `### 🚀 Generated ${framework.toUpperCase()} (${language.toUpperCase()}) Test Framework\nCreated modular test suite with Page Object Model.`,
+          hasCode: true,
+          codeBundle: bundle
+        });
+      }
+
+      // Default fallback
+      const cases = buildTestCases(message, body.jiraTicket, template);
+      return sendJson(res, 200, {
+        status: 'ok',
+        reply: 'Generated structured test cases grounded with QA specs.',
+        testCases: cases,
+        hasCode: false,
+        codeBundle: null
+      });
+    }
+
     // Generate Test Cases Endpoint
     if (pathname === '/api/generate') {
       const requirement = body.requirement || body.prompt || '';

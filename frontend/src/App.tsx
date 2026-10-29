@@ -45,8 +45,9 @@ import {
   getSettings
 } from './api';
 
-type TestTemplate = 'Functional & E2E' | 'Code Generation Only' | 'Boundary & Edge' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
+type TestTemplate = 'No Selection (QA Query / Chat)' | 'Functional & E2E' | 'Code Generation Only' | 'Boundary & Edge' | 'BDD Gherkin Matrix' | 'Security Boundary Matrix' | 'Smoke Test';
 const TEMPLATES: TestTemplate[] = [
+  'No Selection (QA Query / Chat)',
   'Functional & E2E',
   'Code Generation Only',
   'Boundary & Edge',
@@ -445,21 +446,106 @@ function CodeAutomationCard({
 }
 
 function formatTestCases(content: string) {
-  return content.split('\n').map((line, i) => {
-    if (line.startsWith('### ')) return <h3 key={i} className="tc-h3">{line.slice(4)}</h3>;
-    if (line.startsWith('## ')) return <h2 key={i} className="tc-h2">{line.slice(3)}</h2>;
+  const parts: React.ReactNode[] = [];
+  const lines = content.split('\n');
+  let inCodeBlock = false;
+  let codeBlockLines: string[] = [];
+  let codeLang = '';
+
+  lines.forEach((line, i) => {
+    if (line.trim().startsWith('```')) {
+      if (inCodeBlock) {
+        parts.push(
+          <div key={`code-${i}`} className="tc-code-block-wrapper">
+            {codeLang && <div className="tc-code-lang">{codeLang}</div>}
+            <pre className="tc-code-pre">
+              <code>{codeBlockLines.join('\n')}</code>
+            </pre>
+          </div>
+        );
+        inCodeBlock = false;
+        codeBlockLines = [];
+        codeLang = '';
+      } else {
+        inCodeBlock = true;
+        codeLang = line.trim().slice(3).trim();
+      }
+      return;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      return;
+    }
+
+    if (line.startsWith('### ')) {
+      parts.push(<h3 key={i} className="tc-h3">{line.slice(4)}</h3>);
+      return;
+    }
+    if (line.startsWith('## ')) {
+      parts.push(<h2 key={i} className="tc-h2">{line.slice(3)}</h2>);
+      return;
+    }
+    if (line.startsWith('# ')) {
+      parts.push(<h1 key={i} className="tc-h1" style={{ fontSize: '1.25rem', color: '#58a6ff', marginBottom: '8px' }}>{line.slice(2)}</h1>);
+      return;
+    }
     if (line.startsWith('**') && line.endsWith('**')) {
-      return <p key={i} className="tc-bold">{line.slice(2, -2)}</p>;
+      parts.push(<p key={i} className="tc-bold">{line.slice(2, -2)}</p>);
+      return;
     }
     if (/^\*\*(.+)\*\*:/.test(line)) {
-      return <p key={i} className="tc-field" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />;
+      parts.push(<p key={i} className="tc-field" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />);
+      return;
     }
-    if (line.startsWith('- ')) return <li key={i} className="tc-li">{line.slice(2)}</li>;
-    if (/^\d+\. /.test(line)) return <li key={i} className="tc-li tc-step">{line}</li>;
-    if (line.trim() === '---') return <hr key={i} className="tc-divider" />;
-    if (line.trim() === '') return <br key={i} />;
-    return <p key={i} className="tc-p">{line}</p>;
+    if (line.startsWith('- ')) {
+      parts.push(
+        <li key={i} className="tc-li" dangerouslySetInnerHTML={{ 
+          __html: line.slice(2)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code class="tc-inline-code">$1</code>')
+        }} />
+      );
+      return;
+    }
+    if (/^\d+\. /.test(line)) {
+      parts.push(
+        <li key={i} className="tc-li tc-step" dangerouslySetInnerHTML={{ 
+          __html: line
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code class="tc-inline-code">$1</code>')
+        }} />
+      );
+      return;
+    }
+    if (line.trim() === '---') {
+      parts.push(<hr key={i} className="tc-divider" />);
+      return;
+    }
+    if (line.trim() === '') {
+      parts.push(<br key={i} />);
+      return;
+    }
+    parts.push(
+      <p key={i} className="tc-p" dangerouslySetInnerHTML={{ 
+        __html: line
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/`([^`]+)`/g, '<code class="tc-inline-code">$1</code>')
+      }} />
+    );
   });
+
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    parts.push(
+      <div key="code-tail" className="tc-code-block-wrapper">
+        <pre className="tc-code-pre">
+          <code>{codeBlockLines.join('\n')}</code>
+        </pre>
+      </div>
+    );
+  }
+
+  return parts;
 }
 
 function App() {
@@ -483,7 +569,7 @@ function App() {
   } | null>(null);
 
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
-  const [selectedFramework, setSelectedFramework] = useState<'playwright' | 'selenium' | 'none'>('playwright');
+  const [selectedFramework, setSelectedFramework] = useState<'playwright' | 'selenium' | 'none'>('none');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('typescript');
   const [isFrameworkEnabled, setIsFrameworkEnabled] = useState<boolean>(false);
   const [showTestCaseOnlyPopup, setShowTestCaseOnlyPopup] = useState<boolean>(false);
@@ -516,6 +602,7 @@ function App() {
   const [sampleIndex, setSampleIndex] = useState(0);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const frameworkMenuRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -547,9 +634,18 @@ function App() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
-  const [template, setTemplate] = useState<TestTemplate>('Functional & E2E');
+  const [template, setTemplate] = useState<TestTemplate>('No Selection (QA Query / Chat)');
   const [copied, setCopied] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+
+  // Auto-resize textarea dynamically based on scrollHeight
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollHeight, 26), 200)}px`;
+    }
+  }, [input]);
 
   // When 'Code Generation Only' is selected, 'none' (Test Cases Only) cannot be selected or active
   useEffect(() => {
@@ -764,22 +860,56 @@ function App() {
         }
       }
 
-      // Check if user specifically requested test cases or wants code framework
+      // Check if user is asking for code explanation / QA question vs code framework vs test cases
       const trimmedLower = trimmed.toLowerCase();
-      const wantsTestCasesOnly = /test\s*cases?|testcases?|scenarios?|test\s*suite\s*cases|qa\s*cases/i.test(trimmedLower) && 
-                                !/generate\s*code|write\s*code|automation\s*code|codegen|script|framework\s*code|automate/i.test(trimmedLower);
-      const explicitlyWantsCode = /code|script|automate|automation|page\s*object|pom|spec|playwright|selenium/i.test(trimmedLower);
+      const isExplanationOrQuery = /explain|samjhao|what\s+is|what\s+does|how\s+to|how\s+does|review|analyze|debug|why|error|clarify|walkthrough|break\s*down|difference\s+between|kya\s+hai|kaise/i.test(trimmedLower);
+      const explicitlyWantsCode = /generate\s*code|write\s*code|create\s*code|build\s*code|bana\s*code|make\s*script|codegen|new\s*framework|generate\s*selenium|generate\s*playwright/i.test(trimmedLower);
+      const explicitlyWantsTestCases = /test\s*cases?|testcases?|scenarios?|test\s*suite\s*cases|qa\s*cases/i.test(trimmedLower) && !explicitlyWantsCode;
 
-      let isCodeReq = false;
-      if (template === 'Code Generation Only') {
-        isCodeReq = true;
-      } else if (selectedFramework === 'none') {
-        isCodeReq = explicitlyWantsCode && !wantsTestCasesOnly;
+      let executionMode: 'qa_query' | 'code_generation' | 'test_cases' = 'qa_query';
+
+      if (template === 'No Selection (QA Query / Chat)') {
+        if (explicitlyWantsCode) executionMode = 'code_generation';
+        else if (explicitlyWantsTestCases) executionMode = 'test_cases';
+        else executionMode = 'qa_query';
+      } else if (template === 'Code Generation Only') {
+        executionMode = (isExplanationOrQuery && !explicitlyWantsCode) ? 'qa_query' : 'code_generation';
       } else {
-        isCodeReq = !wantsTestCasesOnly;
+        // Any test cases template (Functional & E2E, Boundary & Edge, etc.)
+        if (isExplanationOrQuery && !explicitlyWantsCode && !explicitlyWantsTestCases) {
+          executionMode = 'qa_query';
+        } else if (selectedFramework !== 'none' && !explicitlyWantsTestCases) {
+          executionMode = 'code_generation';
+        } else {
+          executionMode = 'test_cases';
+        }
       }
 
-      if (isCodeReq) {
+      if (executionMode === 'qa_query') {
+        setLoadingStage('Analyzing QA query & synthesizing response...');
+        const chatRes = await chatWithAssistant(
+          trimmed,
+          jiraTicket,
+          settings,
+          template,
+          useDoc && docMeta ? docMeta.sessionDocId : undefined,
+          'none',
+          selectedLanguage,
+          false
+        );
+
+        setMessages((prev) => {
+          const updated = [...prev, {
+            role: 'ai' as const,
+            content: chatRes.reply || 'Here is the response to your QA query.',
+            codeBundle: undefined,
+            testCases: undefined
+          }];
+          if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));
+          return updated;
+        });
+
+      } else if (executionMode === 'code_generation') {
         let targetFw = selectedFramework !== 'none' ? selectedFramework : 'playwright';
         if (/selenium/i.test(trimmed)) targetFw = 'selenium';
         else if (/playwright/i.test(trimmed)) targetFw = 'playwright';
@@ -819,7 +949,7 @@ function App() {
             role: 'ai' as const,
             content: chatRes.reply || `### 🚀 Generated ${targetFw.toUpperCase()} (${targetLang.toUpperCase()}) Test Suite\nCreated Page Object Model and executable tests${resolvedJiraId ? ` for ${resolvedJiraId}` : ''}.`,
             codeBundle: finalBundle,
-            testCases: undefined // STRICTLY CODE ONLY: no test cases table when generating code
+            testCases: undefined
           }];
           if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));
           return updated;
@@ -841,7 +971,7 @@ function App() {
             role: 'ai' as const, 
             content: responseText, 
             testCases: Array.isArray(result.response) ? result.response : undefined,
-            codeBundle: undefined // STRICTLY TEST CASES ONLY: no code bundle when generating test cases
+            codeBundle: undefined
           }];
           if (chatId) setChatStore((s) => ({ ...s, [chatId]: updated }));
           return updated;
@@ -1831,7 +1961,7 @@ function App() {
                       <Zap size={13} style={{ color: selectedFramework === 'none' ? '#8b949e' : '#38bdf8' }} />
                       <span>
                         {selectedFramework === 'none' 
-                          ? '📋 Generate Test Cases' 
+                          ? (template === 'No Selection (QA Query / Chat)' ? '💬 No Code (General QA)' : '📋 Generate Test Cases')
                           : `${selectedFramework === 'playwright' ? '🎭 Playwright' : '☕ Selenium'} (${selectedLanguage.toUpperCase()})`}
                       </span>
                       <ChevronDown 
@@ -2037,12 +2167,12 @@ function App() {
 
                       {/* Test Cases Category */}
                       <div className="framework-popover-section">
-                        <div className="framework-section-title">📋 QA Specifications</div>
+                        <div className="framework-section-title">💬 General QA & Test Cases</div>
                         <div 
                           className={`framework-option ${selectedFramework === 'none' ? 'selected' : ''} ${template === 'Code Generation Only' ? 'disabled' : ''}`}
                           onClick={() => {
                             if (template === 'Code Generation Only') {
-                              setTestCaseOnlyPopupMsg('Test Cases disabled in Code Only mode');
+                              setTestCaseOnlyPopupMsg('Automation Code required in Code Only mode');
                               setShowTestCaseOnlyPopup(true);
                               setTimeout(() => setShowTestCaseOnlyPopup(false), 3000);
                               return;
@@ -2051,11 +2181,11 @@ function App() {
                             setIsFrameworkEnabled(false);
                             setIsFrameworkDropdownOpen(false);
                           }}
-                          title={template === 'Code Generation Only' ? 'Disabled: Code Generation Only template is active' : 'Generate Test Cases'}
+                          title={template === 'Code Generation Only' ? 'Disabled: Code Generation Only template is active' : 'No automation code - Ask QA queries or generate test cases'}
                         >
                           <div className="framework-opt-info">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span className="framework-opt-name">Generate Test Cases</span>
+                              <span className="framework-opt-name">No Code / General QA Assistant</span>
                               {template === 'Code Generation Only' && (
                                 <span style={{ fontSize: 9.5, padding: '1px 6px', background: '#30363d', color: '#f85149', borderRadius: 4, fontWeight: 600 }}>
                                   Unavailable in Code Only
@@ -2063,7 +2193,9 @@ function App() {
                               )}
                             </div>
                             <span className="framework-opt-desc">
-                              {template === 'Code Generation Only' ? 'Switch template away from Code Generation to enable' : 'Functional, negative & boundary test cases'}
+                              {template === 'Code Generation Only' 
+                                ? 'Switch template away from Code Generation to enable' 
+                                : 'Ask testing queries, explain code, or generate test cases without automation scripts'}
                             </span>
                           </div>
                           {selectedFramework === 'none' && <Check size={14} className="framework-check" />}
@@ -2319,14 +2451,28 @@ function App() {
                 )}
               </div>
               
-              <input
+              <textarea
+                ref={textareaRef}
                 id="main-input"
-                type="text"
+                rows={1}
                 className="main-text-input"
-                placeholder={docMeta ? 'Optionally add a Jira ID or extra requirement instructions...' : 'Describe requirements or enter Jira ID (e.g. "Amazon login automation")...'}
+                placeholder={
+                  docMeta 
+                    ? 'Optionally add a Jira ID or extra requirement instructions... (Shift+Enter for newline)' 
+                    : template === 'No Selection (QA Query / Chat)'
+                      ? 'Ask any QA query, explain code, analyze errors, or test strategy... (Shift+Enter for newline)'
+                      : 'Describe requirements or enter Jira ID (e.g. "Amazon login automation")... (Shift+Enter for newline)'
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isLoading && (input.trim() || docMeta)) {
+                      handleGenerate();
+                    }
+                  }
+                }}
                 disabled={isLoading}
                 autoComplete="off"
               />

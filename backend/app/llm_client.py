@@ -213,3 +213,118 @@ async def test_llm_connection(provider: str, config: Dict[str, Any]) -> bool:
         return True
     except Exception as e:
         raise Exception(str(e))
+
+
+async def generate_chat_response(
+    prompt: str,
+    provider: str,
+    config: Dict[str, Any],
+    system_prompt: str | None = None
+) -> str:
+    """
+    Generate conversational QA responses, code explanations, and architecture reviews
+    without enforcing JSON test cases structure.
+    """
+    if not system_prompt:
+        system_prompt = (
+            "You are TestForge AI, an expert Senior QA Automation Architect and Software Testing Specialist. "
+            "You provide detailed, insightful, accurate, and comprehensive QA guidance, code explanations, "
+            "test architecture advice, debugging help, and test automation solutions. "
+            "When asked to explain code, break down the key parts (annotations, setup, lifecycle, test logic, assertions, and teardown) "
+            "and suggest testing best practices. "
+            "Format your answers with clean GitHub-flavored markdown with code blocks, headings, and bullet points."
+        )
+
+    provider_lower = provider.lower()
+    resolved = _resolve_config(provider_lower, config)
+    api_key = resolved.get("apiKey")
+    model = resolved.get("model")
+    base_url = resolved.get("baseUrl")
+
+    try:
+        if provider_lower == "groq":
+            if not api_key:
+                raise ValueError("Groq API key is missing. Please set it in Settings.")
+            model = model or "llama-3.3-70b-versatile"
+            client = groq.AsyncGroq(api_key=api_key)
+            completion = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return completion.choices[0].message.content or ""
+
+        elif provider_lower == "gemini":
+            if not api_key:
+                raise ValueError("Gemini API key is missing. Please set it in Settings.")
+            model_name = model or "gemini-2.5-flash"
+            genai.configure(api_key=api_key)
+            genai_model = genai.GenerativeModel(model_name, system_instruction=system_prompt)
+            response = await genai_model.generate_content_async(prompt)
+            return response.text or ""
+
+        elif provider_lower in ("openai", "openrouter"):
+            if not api_key:
+                raise ValueError(f"{provider} API key is missing. Please set it in Settings.")
+            base_url_val = "https://openrouter.ai/api/v1" if provider_lower == "openrouter" else None
+            model_name = model or ("openai/gpt-4o-mini" if provider_lower == "openrouter" else "gpt-4o-mini")
+            client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url_val)
+            completion = await client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return completion.choices[0].message.content or ""
+
+        elif provider_lower == "claude":
+            if not api_key:
+                raise ValueError("Claude API key is missing. Please set it in Settings.")
+            model_name = model or "claude-3-5-sonnet-20241022"
+            async with httpx.AsyncClient() as http_client:
+                resp = await http_client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json"
+                    },
+                    json={
+                        "model": model_name,
+                        "max_tokens": 4096,
+                        "system": system_prompt,
+                        "messages": [{"role": "user", "content": prompt}]
+                    },
+                    timeout=60.0
+                )
+                resp.raise_for_status()
+                return resp.json()["content"][0]["text"] or ""
+
+        elif provider_lower in ("ollama", "lmstudio"):
+            url = base_url or ("http://localhost:11434" if provider_lower == "ollama" else "http://localhost:1234/v1")
+            model_name = model or ("llama3" if provider_lower == "ollama" else "local-model")
+            endpoint = f"{url.rstrip('/')}/api/chat" if provider_lower == "ollama" else f"{url.rstrip('/')}/chat/completions"
+            async with httpx.AsyncClient() as http_client:
+                payload = {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+                if provider_lower == "ollama":
+                    payload["stream"] = False
+                resp = await http_client.post(endpoint, json=payload, timeout=120.0)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["message"]["content"] if "message" in data else data["choices"][0]["message"]["content"]
+
+        else:
+            raise Exception(f"Unsupported LLM provider: {provider}")
+
+    except Exception as e:
+        raise Exception(f"Chat completion error: {str(e)}")
+

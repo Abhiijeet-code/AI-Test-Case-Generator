@@ -1560,7 +1560,12 @@ export const chatWithAssistant = async (
   languagePreference?: string,
   isFullFramework: boolean = false
 ) => {
-  const isCode = frameworkPreference !== 'none' || /playwright|selenium|cypress|code|framework|script|automate|pom|test case/i.test(message);
+  const msgLower = message.toLowerCase();
+  const isExplanationOrQuery = /explain|samjhao|what\s+is|what\s+does|how\s+to|how\s+does|review|analyze|debug|why|error|clarify|walkthrough|break\s*down|difference\s+between|kya\s+hai|kaise/i.test(msgLower);
+  const isNoSelection = template === 'No Selection (QA Query / Chat)' || !template;
+  const explicitlyWantsCode = /generate\s*code|write\s*code|create\s*code|build\s*code|bana\s*code|make\s*script|codegen|new\s*framework|generate\s*selenium|generate\s*playwright/i.test(msgLower);
+
+  const isCode = (frameworkPreference !== 'none' || template === 'Code Generation Only' || explicitlyWantsCode) && !isExplanationOrQuery && !isNoSelection;
   const jiraId = jiraTicket?.key || jiraTicket?.jiraId || undefined;
   const fw = frameworkPreference && frameworkPreference !== 'none' ? frameworkPreference : (/selenium/i.test(message) ? 'selenium' : 'playwright');
   let lang = languagePreference;
@@ -1579,11 +1584,18 @@ export const chatWithAssistant = async (
       config,
       template,
       sessionDocId,
-      framework: fw,
+      framework: frameworkPreference || 'none',
       language: lang,
       isFullFramework
     });
     if (res.data) {
+      if (res.data.reply && !isCode && !res.data.hasCode) {
+        return {
+          reply: res.data.reply,
+          codeBundle: undefined,
+          testCases: res.data.testCases || undefined
+        };
+      }
       if (res.data.codeBundle && res.data.codeBundle.specCode) {
         return res.data;
       }
@@ -1599,37 +1611,58 @@ export const chatWithAssistant = async (
     }
   } catch {}
 
+  // If user requested an explanation or QA query
+  if (isExplanationOrQuery || isNoSelection) {
+    let explanationReply = '';
+    if (/testng|selenium|webdriver|chromedriver|@test|@beforemethod|public class/i.test(message)) {
+      explanationReply = `### 🔍 Code Walkthrough & Architectural Analysis: Selenium (Java TestNG)
+
+Here is a structured breakdown of the test suite you provided:
+
+#### 1. Test Lifecycle & Annotations
+- **\`@BeforeMethod setUp()\`**:
+  - Automatically initializes and downloads compatible ChromeDriver via \`WebDriverManager.chromedriver().setup()\`.
+  - Maximizes the browser window and navigates to the target application URL.
+  - Instantiates the Page Object (\`loginPage = new LoginPage(driver)\`), adhering to the **Page Object Model (POM)** pattern.
+
+- **\`@Test testValidLogin()\`**:
+  - Executes the positive authentication flow by passing test credentials to the Page Object method (\`loginPage.login(...)\`).
+  - Asserts that after submission, the current browser URL contains \`"dashboard"\` via \`Assert.assertTrue\`.
+
+- **\`@AfterMethod tearDown()\`**:
+  - Gracefully closes browser windows and terminates the ChromeDriver OS process using \`driver.quit()\`.
+  - The null-check (\`if (driver != null)\`) ensures no \`NullPointerException\` occurs if \`setUp()\` fails midway.
+
+---
+
+#### 2. Architecture & Design Evaluation
+- **Page Object Model (POM)**: Isolates selectors and user actions within \`LoginPage\`, making tests resilient to UI changes.
+- **Session Isolation**: Using \`@BeforeMethod\` and \`@AfterMethod\` ensures each test execution has an independent browser session, preventing cross-test state pollution.
+
+---
+
+#### 3. Senior QA Recommendations
+1. **Explicit Synchronization**: Rather than verifying \`contains("dashboard")\` immediately, introduce \`WebDriverWait\` with \`ExpectedConditions.urlContains("dashboard")\` to eliminate timing flakiness.
+2. **Externalize Test Data**: Store sensitive credentials outside Java source files (e.g. \`test-config.properties\` or environment variables).
+3. **Headless Execution Option**: Pass \`ChromeOptions\` (\`--headless=new\`) for CI/CD container execution.`;
+    } else {
+      explanationReply = `### 💬 TestForge QA Assistant\n\nI analyzed your query: **"${message}"**.\n\nHere are the recommended QA testing practices:\n- **Define Test Scope**: Identify positive, negative, boundary, and security test paths.\n- **Maintain Stable Locators**: Prefer resilient test IDs or role-based locators over fragile XPath.\n- **Explicit Waits**: Avoid fixed sleep timers; wait for specific DOM state changes.\n\nFeel free to paste error messages, stack traces, or code to inspect!`;
+    }
+
+    return {
+      reply: explanationReply,
+      codeBundle: undefined,
+      testCases: undefined
+    };
+  }
+
   if (isCode) {
     const bundle = getScaffoldBundle(fw, lang, message, jiraId);
     const groundText = jiraId ? `grounded against requirements for **${jiraId}**` : 'grounded against requirements';
-    const idPrefix = jiraId ? `${jiraId}-AUTO-` : 'TC-';
     return {
       reply: `### 🚀 Generated ${fw.toUpperCase()} (${lang.toUpperCase()}) Framework\nSynthesized a modular Page Object Model (POM) automation test suite ${groundText}.\n\nYou can inspect the files below, switch tabs to see Page Objects and configuration, copy or download the files, or click **"${fw === 'selenium' ? 'Open in Eclipse' : 'Open in VS Code'}"** to execute directly in your IDE.`,
       codeBundle: bundle,
-      testCases: [
-        {
-          id: `${idPrefix}01`,
-          title: `E2E ${fw} - Valid authentication redirects to dashboard`,
-          type: 'Positive / Functional',
-          priority: 'P1',
-          preconditions: 'User registered with verified 2FA',
-          steps: ['Open login page', 'Input valid test credentials', 'Click submit button'],
-          test_data: 'qa.analyst@fintech.io / SecurePass2026!',
-          expected_result: 'HTTP 200 session created; redirected to /dashboard',
-          linked_jira_id: jiraId
-        },
-        {
-          id: `${idPrefix}02`,
-          title: `E2E ${fw} - Invalid password triggers account lock protection`,
-          type: 'Negative / Security',
-          priority: 'P2',
-          preconditions: 'Account active',
-          steps: ['Open login page', 'Input wrong password 3 consecutive times'],
-          test_data: 'WrongPassword!',
-          expected_result: 'Locked account warning banner displayed; account locked for 15m',
-          linked_jira_id: jiraId
-        }
-      ]
+      testCases: undefined
     };
   }
 

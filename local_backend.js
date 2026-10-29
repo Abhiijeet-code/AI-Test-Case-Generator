@@ -46,6 +46,35 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
+function deriveMeaningfulSlug(requirement, jiraId) {
+  if (jiraId) {
+    return jiraId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+  if (!requirement || typeof requirement !== 'string') return 'E2E_TestSuite';
+
+  const reqLower = requirement.toLowerCase();
+  if (reqLower.includes('amazon')) {
+    if (reqLower.includes('search')) return 'Amazon_Product_Search';
+    if (reqLower.includes('cart')) return 'Amazon_Cart_Checkout';
+    return 'Amazon_SignIn_Validation';
+  }
+
+  // Clean and extract meaningful words
+  const cleaned = requirement
+    .replace(/(?:generate|write|create|give|please|test\s*cases?\s*for|automation\s*for|test\s*case|scaffold|code\s*for|verify|validate)\s*/gi, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .trim();
+
+  const stopWords = new Set(['the', 'and', 'for', 'with', 'from', 'into', 'this', 'that', 'test', 'cases', 'suite', 'page', 'flow', 'only', 'app']);
+  const words = cleaned.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w.toLowerCase())).slice(0, 4);
+
+  if (words.length > 0) {
+    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('_');
+  }
+
+  return 'E2E_TestSuite';
+}
+
 function buildAutomationBundle(framework, language, requirement, jiraId = null, isFullFramework = true) {
   const fw = (framework || 'playwright').toLowerCase();
   const reqLower = (requirement || '').toLowerCase();
@@ -53,7 +82,7 @@ function buildAutomationBundle(framework, language, requirement, jiraId = null, 
   const targetSite = isAmazon ? 'Amazon' : 'Web Application';
   const targetUrl = isAmazon ? 'https://www.amazon.com/ap/signin' : 'http://localhost:5173/login';
 
-  const cleanId = jiraId ? jiraId.replace(/[^a-zA-Z0-9_-]/g, '_') : (isAmazon ? 'AmazonLogin' : 'AppLogin');
+  const cleanId = deriveMeaningfulSlug(requirement, jiraId);
 
   let fileName = '';
   let absFilePath = '';
@@ -1504,31 +1533,29 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
 
       // Execute code command to open in VS Code reliably on ANY laptop (Windows, macOS, Linux)
       if (process.platform === 'win32') {
-        const candidates = [
-          process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe') : null,
-          process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Microsoft VS Code', 'Code.exe') : null,
-          process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Microsoft VS Code', 'Code.exe') : null
-        ].filter(Boolean);
-        const found = candidates.find(p => fs.existsSync(p));
-        const { spawn } = require('node:child_process');
-        if (found) {
-          const child = spawn(found, [targetFolder, '-g', targetFile], { detached: true, stdio: 'ignore' });
-          child.unref();
-          console.log(`VS Code native exe launched: ${found} with workspace: ${targetFolder}`);
-        } else {
-          const child = spawn('cmd.exe', ['/c', 'code', targetFolder, '-g', targetFile], { detached: true, stdio: 'ignore' });
-          child.unref();
-          // Fallback to protocol launch via Windows shell
-          exec(`cmd.exe /c start "" "vscode://file/${forwardSlashTargetFile}"`);
+        // 1. Launch VS Code in a new window with workspace folder and test file
+        exec(`cmd.exe /c start "" code -n "${targetFolder}" "${targetFile}"`, (codeErr) => {
+          if (codeErr) {
+            console.warn('VS Code start command notice:', codeErr.message);
+            exec(`cmd.exe /c start "" "vscode://file/${forwardSlashTargetFolder}"`);
+          } else {
+            console.log(`VS Code launched successfully with workspace: ${targetFolder}`);
+          }
+        });
+
+        // 2. Open Windows File Explorer directly with the generated test file selected
+        if (fs.existsSync(targetFile)) {
+          exec(`explorer.exe /select,"${targetFile}"`);
+        } else if (fs.existsSync(targetFolder)) {
+          exec(`explorer.exe "${targetFolder}"`);
         }
       } else if (process.platform === 'darwin') {
-        const macApp = '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code';
-        const cmdToRun = fs.existsSync(macApp) ? `"${macApp}" "${targetFolder}" -g "${targetFile}"` : `code "${targetFolder}" -g "${targetFile}"`;
-        exec(cmdToRun, (cliErr) => {
-          if (cliErr) exec(`open "vscode://file/${forwardSlashTargetFile}"`);
+        exec(`code -n "${targetFolder}" "${targetFile}"`, (cliErr) => {
+          if (cliErr) exec(`open "vscode://file/${forwardSlashTargetFolder}"`);
         });
+        if (fs.existsSync(targetFile)) exec(`open -R "${targetFile}"`);
       } else {
-        exec(`code "${targetFolder}" -g "${targetFile}"`);
+        exec(`code -n "${targetFolder}" "${targetFile}"`);
       }
 
       return sendJson(res, 200, {
@@ -1545,6 +1572,22 @@ You can inspect and copy the code below, or click **"${fw === 'selenium' ? 'Open
           '3. Open the integrated terminal in VS Code (Ctrl+`) and run: npx playwright test'
         ]
       });
+    }
+
+    // Open Folder in OS File Explorer
+    if (pathname === '/api/open-folder') {
+      const { folderPath, filePath } = body;
+      if (process.platform === 'win32') {
+        if (filePath && fs.existsSync(filePath)) {
+          exec(`explorer.exe /select,"${filePath}"`);
+        } else if (folderPath && fs.existsSync(folderPath)) {
+          exec(`explorer.exe "${folderPath}"`);
+        }
+      } else if (process.platform === 'darwin') {
+        if (filePath && fs.existsSync(filePath)) exec(`open -R "${filePath}"`);
+        else if (folderPath) exec(`open "${folderPath}"`);
+      }
+      return sendJson(res, 200, { status: 'opened' });
     }
 
     // Launch in Eclipse Endpoint

@@ -699,18 +699,27 @@ export const exportVsCodeApi = async (
   specCode?: string
 ) => {
   const payload = { testCases, title, jiraId, language, framework, filePath, fileName, isFullFramework, specCode };
-  // 1. Try local companion daemon if running on this laptop
+  // 1. Try local companion daemon if running on this laptop (4s timeout)
   try {
-    const localRes = await axios.post('http://127.0.0.1:3001/api/export-vscode', payload, { timeout: 800 });
-    if (localRes?.data?.status === 'ok' || localRes?.data?.workspacePath) {
+    const localRes = await axios.post('http://127.0.0.1:3001/api/export-vscode', payload, { timeout: 4000 });
+    if (localRes?.data?.status === 'ok' || localRes?.data?.status === 'success' || localRes?.data?.workspacePath) {
       return localRes.data;
     }
-  } catch {
-    // Local daemon not active, fallback to cloud API
+  } catch (err) {
+    console.warn('Local daemon export-vscode notice, trying cloud API:', err);
   }
 
   const res = await api.post('/export-vscode', payload);
   return res.data;
+};
+
+export const openFolderApi = async (folderPath?: string, filePath?: string) => {
+  try {
+    const res = await axios.post('http://127.0.0.1:3001/api/open-folder', { folderPath, filePath }, { timeout: 2000 });
+    return res.data;
+  } catch {
+    return { status: 'failed' };
+  }
 };
 
 export const getRagWorkflowApi = async () => {

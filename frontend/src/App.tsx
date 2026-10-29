@@ -24,7 +24,8 @@ import {
   PanelLeft,
   Coffee,
   Sparkles,
-  Check
+  Check,
+  Folder
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Sidebar, { DEMO_SESSIONS } from './components/Sidebar';
@@ -36,6 +37,7 @@ import {
   fetchJiraTicket, 
   uploadDocument, 
   exportVsCodeApi, 
+  openFolderApi,
   chatWithAssistant,
   generateFrameworkApi,
   getScaffoldBundle,
@@ -909,7 +911,7 @@ function App() {
     const fw = bundleOrData?.framework || selectedFramework || 'playwright';
     const lang = bundleOrData?.language || selectedLanguage || 'typescript';
     const jId = bundleOrData?.jiraId || undefined;
-    const title = bundleOrData?.title || bundleOrData?.fileName || 'Regression Test Suite';
+    const title = input.trim() || bundleOrData?.title || bundleOrData?.fileName || 'E2E Test Suite';
     const filePath = bundleOrData?.filePath;
     const fileName = bundleOrData?.fileName || (lang === 'python' ? 'test_suite.py' : (lang === 'java' ? 'PlaywrightTest.java' : 'test.spec.ts'));
     const specCode = bundleOrData?.specCode || bundleOrData?.code || '';
@@ -931,45 +933,38 @@ function App() {
         specCode
       );
 
-      if (res && res.workspacePath) {
-        setVsCodeModalData({
-          ...res,
-          specCode: res.specCode || specCode,
-          pageCode,
-          pageFileName,
-          configCode: res.configCode || configCode
-        });
-        const fallbackPath = filePath || `test_code/vscode/tests/${fileName}`;
-        const targetUri = res.vscodeUri || `vscode://file/${(res.filePath || fallbackPath).replace(/\\/g, '/')}`;
-        try { window.location.href = targetUri; } catch {}
-      } else {
-        const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
-        const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
-        const targetUri = `vscode://file/${targetPath.replace(/\\/g, '/')}`;
-        setVsCodeModalData({
-          status: 'success',
-          fileName,
-          filePath: targetPath,
-          workspacePath: wsPath,
-          vscodeUri: targetUri,
-          specCode,
-          pageCode,
-          pageFileName,
-          configCode,
-          instructions: [
-            `Test files saved to: ${wsPath}`,
-            '1. VS Code workspace folder linked on your computer',
-            '2. Test suite opened in active editor tab',
-            '3. Run in VS Code terminal: npx playwright test'
-          ]
-        });
-        try { window.location.href = targetUri; } catch {}
-      }
+      const resolvedWs = res?.workspacePath?.includes(':') || res?.workspacePath?.startsWith('/')
+        ? res.workspacePath
+        : (res?.workspacePath ? `C:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/${res.workspacePath}` : `C:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode`);
+      const resolvedFile = res?.filePath?.includes(':') || res?.filePath?.startsWith('/')
+        ? res.filePath
+        : (res?.filePath ? `C:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/${res.filePath}` : `${resolvedWs}/tests/${res?.fileName || fileName}`);
+      const targetUri = res?.vscodeUri || `vscode://file/${resolvedFile.replace(/\\/g, '/')}`;
+
+      setVsCodeModalData({
+        status: 'success',
+        fileName: res?.fileName || fileName,
+        filePath: resolvedFile,
+        workspacePath: resolvedWs,
+        vscodeUri: targetUri,
+        specCode: res?.specCode || specCode,
+        pageCode: pageCode,
+        pageFileName: pageFileName,
+        configCode: res?.configCode || configCode,
+        instructions: res?.instructions || [
+          `Test files saved to: ${resolvedWs}`,
+          '1. VS Code workspace folder linked on your computer',
+          '2. Test suite opened in active editor tab',
+          '3. Run in VS Code terminal: npx playwright test'
+        ]
+      });
+
+      try { window.location.href = targetUri; } catch {}
     } catch (e) {
       console.warn('Backend VS Code launcher notice:', e);
-      const targetPath = filePath || `test_code/vscode/tests/${fileName}`;
-      const wsPath = bundleOrData?.workspacePath || 'test_code/vscode';
-      const targetUri = `vscode://file/${targetPath.replace(/\\/g, '/')}`;
+      const wsPath = `C:/Abhi/TESTCASE_GENERATOR/AI-Test-Case-Generator/test_code/vscode`;
+      const targetPath = `${wsPath}/tests/${fileName}`;
+      const targetUri = `vscode://file/${targetPath}`;
       setVsCodeModalData({
         status: 'success',
         fileName,
@@ -2691,21 +2686,32 @@ function App() {
                   </button>
                   <button 
                     className="toolbar-btn"
-                    style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    style={{ background: '#007acc', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}
                     onClick={() => {
                       const uri = vsCodeModalData.vscodeUri || `vscode://file/${vsCodeModalData.filePath.replace(/\\/g, '/')}`;
                       try { window.location.href = uri; } catch {}
                       exportVsCodeApi([], undefined, undefined, undefined, 'playwright', vsCodeModalData.filePath, vsCodeModalData.fileName, true, vsCodeModalData.specCode).catch(() => null);
                     }}
-                    title="Launch VS Code desktop application on this computer"
+                    title="Launch VS Code desktop application and open this test suite"
                   >
                     <ExternalLink size={13} />
                     <span>Launch in VS Code</span>
                   </button>
+                  <button
+                    className="toolbar-btn"
+                    style={{ background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, fontWeight: 600, cursor: 'pointer' }}
+                    onClick={() => {
+                      openFolderApi(vsCodeModalData.workspacePath, vsCodeModalData.filePath);
+                    }}
+                    title="Open this suite folder in Windows File Explorer"
+                  >
+                    <Folder size={13} />
+                    <span>Open in Explorer</span>
+                  </button>
                   <a
                     href={vsCodeModalData.vscodeUri || `vscode://file/${vsCodeModalData.filePath}`}
                     className="toolbar-btn"
-                    style={{ background: '#1f2937', color: '#38bdf8', border: '1px solid #38bdf840', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    style={{ background: '#1f2937', color: '#38bdf8', border: '1px solid #38bdf840', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 6 }}
                     title="Direct deep link to open in VS Code on any laptop"
                   >
                     <Code2 size={13} />

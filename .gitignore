@@ -22,6 +22,7 @@ settings.json
 .metadata/
 .vscode/
 pom.xml
-/src/
+src/
 tests/
 test_code/
+
